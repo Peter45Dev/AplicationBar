@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Turnos</title>
+
+    <!-- Custom-Files -->
+    <link rel="stylesheet" href="css/bootstrap.css" />
+    <!-- Bootstrap-Core-CSS -->
+    <link
+      href="css/css_slider.css"
+      type="text/css"
+      rel="stylesheet"
+      media="all"
+    />
+    <!-- css slider -->
+    <link rel="stylesheet" href="css/style.css" type="text/css" media="all" />
+    <!-- Style-CSS -->
+    <link href="css/font-awesome.min.css" rel="stylesheet" />
+    <!-- Font-Awesome-Icons-CSS -->
+    <!-- //Custom-Files -->
+
+    <!-- Web-Fonts -->
+    <link
+      href="//fonts.googleapis.com/css?family=Lato:100,100i,300,300i,400,400i,700,700i,900,900i&amp;subset=latin-ext"
+      rel="stylesheet"
+    />
+    <link
+      href="//fonts.googleapis.com/css?family=Barlow+Semi+Condensed:100,100i,200,200i,300,300i,400,400i,500,500i,600,600i,700,700i,800,800i,900,900i"
+      rel="stylesheet"
+    />
+    <!-- //Web-Fonts -->
+
+    <script type="module">
+      import { UUID } from "https://unpkg.com/uuidjs@^5";
+      // Import the functions you need from the SDKs you need
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+      /*import {
+        getAuth,
+        createUserWithEmailAndPassword,
+      } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";*/
+      import {
+        getStorage,
+        ref,
+        uploadBytes,
+        getDownloadURL,
+        deleteObject,
+        list,
+      } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
+      //import {getAuth,onAuthStateChanged,signInWithEmailAndPassword} from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+      import {
+        getDatabase,
+        ref as _ref,
+        set,
+        onValue,
+        get,
+        push,
+        remove,
+      } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyBF6FUMNt82O525pGOVyKm1ZiOhmLzLPmQ",
+        authDomain: "barinicial.firebaseapp.com",
+        databaseURL: "https://barinicial-default-rtdb.firebaseio.com",
+        projectId: "barinicial",
+        storageBucket: "barinicial.appspot.com",
+        messagingSenderId: "722647862157",
+        appId: "1:722647862157:web:f038ba770f0e773d294bc4",
+      };
+
+      const app = initializeApp(firebaseConfig);
+
+      //const auth = getAuth();
+      const db = getDatabase();
+      let ArrayNombresProd = [];
+      let ArrayLocales = [];
+      let uuid;
+      let idLocalActual;
+      //let ArrayNomUser = [];
+      let arrayKeyDB = [];
+      let sesionesTabla = [];
+      let usuarioSesion;
+      let sesionesActivas = [];
+      let sesionesCerradas = [];
+      let idSesionAbiertaActual;
+      let idSesionCerradaActual;
+      let JsonUser;
+      let arregloMesas = [];
+      //let ObjCtrlSesion;
+
+      //variables
+
+      window.onload = init;
+
+      function init() {
+        //controlar botones para el rol del usuario y enviar a login sino se ha creado el usuario en el local
+        try {
+          let Userobj = localStorage.getItem("UserData"); //UserData
+          JsonUser = JSON.parse(Userobj);
+          let UserRol = JsonUser.userrole;
+          console.log(UserRol);
+          if (UserRol == "Normal") {
+            const linkInvent = document.getElementById("linkInventario");
+            const linkRegis = document.getElementById("linkRegistro");
+            const linkCarga = document.getElementById("linkCarga");
+
+            linkInvent.style.display = "none";
+            linkRegis.style.display = "none";
+            linkCarga.style.display = "none";
+
+            ////set usuario sesion para que siempre muestre las sesiones del usuario
+
+            usuarioSesion = JsonUser.username;
+
+            const opcionUser = document.getElementById("grupoUsuario");
+            const btnBusqueda = document.getElementById("buscarSesion");
+            opcionUser.style.display = "none";
+            btnBusqueda.style.display = "none";
+
+            BuscarSesionesPorUser(); //ejecutra el método de buscar sesiones y mostrarlas
+          }
+        } catch (error) {
+          location.href = "index.html";
+          console.log(error);
+        }
+        /////fin control rol
+
+        //btn cerrar sesion elimina el local y envía al index
+        const CerrarSesion = document.getElementById("CerrarSesionBtn");
+        CerrarSesion.addEventListener("click", function () {
+          localStorage.setItem("UserData", "");
+          location.href = "index.html";
+        });
+
+        llenarArregloUserName();
+
+        //boton parar consultar las sesiones
+        const consultarSesiones = document.getElementById("buscarSesion");
+        consultarSesiones.addEventListener("click", function () {
+          LeerUsuarioConsulta();
+        });
+
+        //window.addEventListener("scroll", moverPopupConScroll);
+      }
+
+      function LeerUsuarioConsulta() {
+        const nombreUser = document.getElementById("inv_user");
+
+        if (nombreUser.value != "") {
+          usuarioSesion = nombreUser.value;
+          BuscarSesionesPorUser();
+          BuscarCtrlSesion();
+        } else {
+          alert("No se han encontrado Usuarios!!");
+        }
+      }
+
+      function BuscarCtrlSesion() {
+        const rutaObjeto = `ctrlsesion/${usuarioSesion}`;
+
+        // Referencia a la ubicación del objeto en la base de datos
+        const objetoRef = _ref(db, rutaObjeto);
+
+        // Escucha cambios en la ubicación del objeto
+        onValue(
+          objetoRef,
+          (snapshot) => {
+            const objeto = snapshot.val();
+
+            if (objeto) {
+              console.log("Objeto encontrado:", objeto);
+              // Realiza acciones con los datos del objeto aquí crear función para mostrar mesas
+              //ObjCtrlSesion = objeto;
+              if (objeto.Mesas == undefined) {
+                arregloMesas = [];
+              } else {
+                arregloMesas = objeto.Mesas;
+                VerificarProdsMesas();
+              }
+
+              console.log("muestra arreglomesas", arregloMesas);
+
+              llenarTablaMesas();
+            }
+          },
+          (error) => {
+            console.error("Error al obtener el objeto:", error);
+          }
+        );
+      }
+
+      function VerificarProdsMesas() {
+        arregloMesas.forEach((element) => {
+          if (element.productos == undefined) {
+            element.productos = [];
+          }
+        });
+      }
+
+      function llenarTablaMesas() {
+        const miTabla = document.getElementById("tabla-mesas-id");
+        limpiarTabla(miTabla);
+        let ctrlItem = 0;
+        for (var i in arregloMesas) {
+          const nuevaFila = miTabla.insertRow();
+          nuevaFila.classList.add("fila-tabla");
+          nuevaFila.setAttribute("item", ctrlItem);
+
+          //creación de celda item
+          const nuevaCeldai = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+          nuevaCeldai.textContent = ++ctrlItem;
+          nuevaCeldai.classList.add("celda-tabla");
+          for (const atributo in arregloMesas[i]) {
+            let objetoPuntual = arregloMesas[i];
+            //console.log("atributo", objetoPuntual[atributo], arregloMesas[i]);
+            // Agregar una nueva celda en la fila
+            if (atributo == "total") {
+              const nuevaCelda = nuevaFila.insertCell();
+              nuevaCelda.textContent = objetoPuntual[atributo];
+              nuevaCelda.classList.add("celda-tabla");
+            } else if (atributo == "nombre") {
+              const nuevaCelda = nuevaFila.insertCell();
+              nuevaCelda.textContent = objetoPuntual[atributo];
+              nuevaCelda.classList.add("celda-tabla");
+            }
+          }
+        }
+      }
+
+      async function BuscarSesionesPorUser() {
+        const referencia = _ref(db, "/sesion");
+
+        try {
+          const snapshot = await get(ref(referencia));
+          const datos = snapshot.val();
+          procesarDatosInv(datos);
+        } catch (error) {
+          console.error("Error al leer los datos:", error);
+        }
+      }
+
+      function procesarDatosInv(data) {
+        let ArraySesiones = [];
+        let NameSesion = [];
+        let SesionesEliminar = [];
+
+        const fechaCurrent = new Date();
+
+        //console.log("sesion", data);
+        for (var i in data) {
+          const partesFecha = i.split("-");
+          const dia = parseInt(partesFecha[0], 10); // Convierte a número
+          const mes = parseInt(partesFecha[1], 10) - 1; // Los meses en JavaScript son de 0 a 11
+          const anio = parseInt(partesFecha[2], 10);
+
+          console.log("partes fecha", partesFecha);
+
+          // Crea un objeto Date con la fecha de la cadena
+          const fechainicial = new Date(anio, mes, dia);
+          console.log("fecha inicial sin suma", fechainicial);
+          fechainicial.setDate(fechainicial.getDate() + 20);
+          console.log("fi", fechainicial, "fc", fechaCurrent);
+          if (fechaCurrent > fechainicial) {
+            SesionesEliminar.push(i);
+          } else {
+            ArraySesiones.push(data[i]);
+            NameSesion.push(i);
+          }
+        }
+        if (SesionesEliminar.length > 0) {
+          // eliminarSesionesViejas(SesionesEliminar);
+        }
+        cuadrarArreglos(ArraySesiones, NameSesion);
+      }
+
+      function eliminarSesionesViejas(array) {
+        for (var i in array) {
+          remove(_ref(db, `sesion/${array[i]}`)).then(() => {
+            console.log("sesion ", array[i], " borrada");
+          });
+        }
+      }
+
+      function cuadrarArreglos(sesiones, name) {
+        let fechaSesCerr = [];
+        let fechaSesAbi = [];
+        sesionesActivas = [];
+        sesionesCerradas = [];
+
+        const alertaTexto = document.getElementById("alertaTablaAbi");
+        //console.log("sesiones:", sesiones);
+        if (sesiones.length >= 1) {
+          for (var j in sesiones) {
+            //console.log("sesion", i);
+            for (const llave in sesiones[j]) {
+              //console.log("key: ", key);
+              if (llave == usuarioSesion) {
+                let bolCerrada = false;
+                for (const key in sesiones[j][llave]) {
+                  console.log("sesiones key", sesiones[j][llave][key]);
+
+                  //console.log("fin en seiones:", sesiones[j][llave][key][i]);
+                  if (sesiones[j][llave][key].fechafin) {
+                    bolCerrada = true;
+                  }
+                }
+
+                if (bolCerrada) {
+                  sesionesCerradas.push(sesiones[j][llave]);
+                  fechaSesCerr.push(name[j]);
+                } else {
+                  sesionesActivas.push(sesiones[j][llave]);
+                  fechaSesAbi.push(name[j]);
+                }
+              }
+            }
+          }
+        } else {
+          alertaTexto.textContent = "No hay Turnos!";
+        }
+        console.log(
+          "long ac",
+          sesionesActivas.length,
+          "long ce",
+          sesionesCerradas.length
+        );
+        if (sesionesActivas.length < 1 && sesionesCerradas.length < 1) {
+          alertaTexto.textContent = `No hay Turnos para el usuario ${usuarioSesion}!`;
+        } else if (sesionesCerradas.length > 0 && sesionesActivas.length < 1) {
+          alertaTexto.textContent = `No hay Turnos abiertos para el usuario ${usuarioSesion}!`;
+        } else if (sesionesCerradas.length < 1 && sesionesActivas.length > 0) {
+          alertaTexto.textContent = `No hay Turnos cerrados para el usuario ${usuarioSesion}!`;
+        } else {
+          alertaTexto.textContent = ``;
+        }
+
+        const miTablaSesCerr = document.getElementById("tablaTurnosCerr");
+        const miTablaSesAbi = document.getElementById("tablaTurnosAbi");
+
+        console.log(
+          "sesiones abiertas",
+          sesionesActivas,
+          "sesiones cerradas",
+          sesionesCerradas
+        );
+
+        console.log("fechas abi", fechaSesAbi, "fechas cerr", fechaSesCerr);
+
+        llenarTablaSesions(sesionesActivas, fechaSesAbi, miTablaSesAbi);
+        llenarTablaSesionsCerr(sesionesCerradas, fechaSesCerr, miTablaSesCerr);
+      }
+
+      function llenarTablaSesions(sesiones, fechas, miTabla) {
+        limpiarTabla(miTabla);
+
+        console.log("sesionesAbi", sesiones);
+
+        let ctrlItem = 0;
+        for (var i in sesiones) {
+          let objetoPuntual = [];
+          const nuevaFila = miTabla.insertRow();
+          nuevaFila.classList.add("fila-tabla");
+          nuevaFila.setAttribute("i", ctrlItem);
+
+          nuevaFila.addEventListener("click", (event) => {
+            const dataId = nuevaFila.getAttribute("item");
+            idSesionAbiertaActual = dataId;
+            mostrarMesaSesionAbi(dataId, sesionesActivas);
+          });
+
+          //creación de celda item
+          const nuevaCeldai = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+          nuevaCeldai.textContent = fechas[i];
+          nuevaCeldai.classList.add("celda-tabla");
+          let totalSesion = calcularTotalVendido(sesiones[i]);
+          for (var atri in sesiones[i]) {
+            if (sesiones[i][atri].fechainicio) {
+              objetoPuntual[0] = sesiones[i][atri].fechainicio;
+            }
+            objetoPuntual[1] = totalSesion;
+          }
+
+          console.log("arreglo elementos", objetoPuntual);
+
+          let nuevaCelda = nuevaFila.insertCell();
+          nuevaCelda.textContent = objetoPuntual[0];
+          nuevaCelda.classList.add("celda-tabla");
+
+          let nuevaCelda3 = nuevaFila.insertCell();
+          nuevaCelda3.textContent = objetoPuntual[1];
+          nuevaCelda3.classList.add("celda-tabla");
+        }
+      }
+
+      function llenarTablaSesionsCerr(sesiones, fechas, miTabla) {
+        limpiarTabla(miTabla);
+
+        console.log("sesiones", sesiones);
+
+        let ctrlItem = 0;
+        for (var i in sesiones) {
+          let objetoPuntual = [];
+          const nuevaFila = miTabla.insertRow();
+          nuevaFila.classList.add("fila-tabla");
+          nuevaFila.setAttribute("i", ctrlItem);
+
+          nuevaFila.addEventListener("click", (event) => {
+            const dataId = nuevaFila.getAttribute("item");
+            idSesionCerradaActual = dataId;
+            mostrarMesaSesionAbi(dataId, sesionesCerradas);
+          });
+
+          //creación de celda item
+          const nuevaCeldai = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+          nuevaCeldai.textContent = fechas[i];
+          nuevaCeldai.classList.add("celda-tabla");
+          let totalSesion = calcularTotalVendido(sesiones[i]);
+          for (var atri in sesiones[i]) {
+            if (sesiones[i][atri].fechainicio) {
+              objetoPuntual[0] = sesiones[i][atri].fechainicio;
+            } else if (sesiones[i][atri].fechafin) {
+              objetoPuntual[1] = sesiones[i][atri].fechafin;
+            }
+            objetoPuntual[2] = totalSesion;
+          }
+
+          console.log("arreglo elementos", objetoPuntual);
+
+          let nuevaCelda = nuevaFila.insertCell();
+          nuevaCelda.textContent = objetoPuntual[0];
+          nuevaCelda.classList.add("celda-tabla");
+
+          let nuevaCelda3 = nuevaFila.insertCell();
+          nuevaCelda3.textContent = objetoPuntual[1];
+          nuevaCelda3.classList.add("celda-tabla");
+
+          let nuevaCelda2 = nuevaFila.insertCell();
+          nuevaCelda2.textContent = objetoPuntual[2];
+          nuevaCelda2.classList.add("celda-tabla");
+        }
+      }
+
+      function limpiarTabla(tabla) {
+        const filas = tabla.getElementsByTagName("tr");
+
+        for (let i = filas.length - 1; i > 0; i--) {
+          const fila = filas[i];
+          fila.parentNode.removeChild(fila);
+        }
+      }
+
+      function calcularTotalVendido(objeto) {
+        let sumaVentasTotal = 0;
+        const totalVentas = document.getElementById("totalVentas");
+
+        for (const key in objeto) {
+          if (objeto[key].mesas && objeto[key].mesas.total) {
+            console.log("valor total mesa", objeto[key].mesas.total);
+            sumaVentasTotal += objeto[key].mesas.total;
+          }
+        }
+        return sumaVentasTotal;
+      }
+
+      function llenarArregloUserName() {
+        onValue(_ref(db, "/usuarios"), (snapshot) => {
+          // console.log(snapshot);
+          procesarDatosUserNomb(snapshot.val());
+        });
+      }
+
+      function procesarDatosUserNomb(data) {
+        let ArrayNomUser = [];
+
+        for (var i in data) {
+          ArrayNomUser.push(data[i].name);
+        }
+        crearopcionesSelect(ArrayNomUser);
+      }
+
+      function crearopcionesSelect(ArrayNomUser) {
+        const miSelect = document.getElementById("inv_user");
+
+        // Crear opciones
+        for (var i in ArrayNomUser) {
+          const opcion1 = document.createElement("option");
+          opcion1.text = ArrayNomUser[i];
+          opcion1.value = ArrayNomUser[i];
+
+          miSelect.add(opcion1);
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <!-- //encabezado con navegación -->
+
+    <!-- header -->
+    <header id="home">
+      <!-- top-bar -->
+      <div class="top-bar py-2 border-bottom">
+        <div class="container">
+          <div class="row middle-flex">
+            <div
+              class="col-xl-7 col-md-5 top-social-agile mb-md-0 mb-1 text-lg-left text-center"
+            >
+              <div class="row">
+                <div class="col-xl-3 col-6 header-top_w3layouts">
+                  <p class="text-da">
+                    <span class="fa fa-map-marker mr-2"></span>Engativá, Bogotá
+                  </p>
+                </div>
+                <div class="col-xl-3 col-6 header-top_w3layouts">
+                  <p class="text-da">
+                    <span class="fa fa-phone mr-2"></span>3015134793
+                  </p>
+                </div>
+                <div class="col-xl-6"></div>
+              </div>
+            </div>
+            <div
+              class="col-xl-5 col-md-7 top-social-agile text-md-right text-center pr-sm-0 mt-md-0 mt-2"
+            >
+              <div class="row middle-flex">
+                <div class="col-lg-5 col-4 top-w3layouts p-md-0 text-right">
+                  <!-- login -->
+                  <a
+                    href="index.html"
+                    class="btn login-button-2 text-uppercase text-wh"
+                  >
+                    <span class="fa fa-sign-in mr-2"></span>Login</a
+                  >
+                  <!-- //login --><!-- login -->
+                </div>
+                <div class="col-lg-7 col-8 social-grid-w3">
+                  <button
+                    type="button"
+                    class="btn submit-contact ml-auto"
+                    id="CerrarSesionBtn"
+                  >
+                    Cerrar Sesión
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="main-top py-1">
+      <div class="container">
+        <div class="nav-content">
+          <!-- logo -->
+          <h1>
+            <a id="logo" class="logo" href="index.html">
+              <img src="images/logo.png" alt="" class="img-fluid" /><span
+                >BAR</span
+              >
+              App
+            </a>
+          </h1>
+          <!-- //logo -->
+          <!-- nav -->
+          <div class="nav_web-dealingsls">
+            <nav>
+              <label for="drop" class="toggle">Menu</label>
+              <input type="checkbox" id="drop" />
+              <ul class="menu">
+                <li id="linkInventario">
+                  <a href="inventario.html">Inventario</a>
+                </li>
+                <li><a href="menu.html">Productos</a></li>
+                <li id="linkRegistro">
+                  <a href="register.html">Registrar Usuario</a>
+                </li>
+                <li id="linkCarga">
+                  <a href="loadform.html">Cargar Producto</a>
+                </li>
+                <li><a href="calculoOrden.html">Turno Mesas</a></li>
+              </ul>
+            </nav>
+          </div>
+          <!-- //nav -->
+        </div>
+      </div>
+    </div>
+
+    <!-- //formulario -->
+
+    <section>
+      <div class="container pb-xl-5 pb-lg-3">
+        <div class="title-section text-center mb-md-5 mb-4">
+          <div class="container py-xl-4">
+            <h3 class="w3ls-title"><span>Turnos</span></h3>
+
+            <div
+              class="container py-xl-5 py-lg-3 elementos-extrem-fila width80"
+            >
+              <div class="form-group elementos-flex" id="grupoUsuario">
+                <label>Usuario:&nbsp;</label>
+                <select
+                  class="form-control"
+                  name="user"
+                  id="inv_user"
+                  placeholder=""
+                  required=""
+                >
+                  <!--<option value="Admin">Admin</option>
+                      <option value="Normal">Normal</option>-->
+                </select>
+              </div>
+              <div>
+                <button type="button" class="btn" id="buscarSesion">
+                  Traer Turnos
+                </button>
+              </div>
+            </div>
+            <h2>Turnos Abiertos</h2>
+            <h2 id="alertaTablaAbi" class="texto-alerta"></h2>
+            <div class="container py-xl-5 py-lg-3">
+              <table class="tabla_mesas table-striped" id="tablaTurnosAbi">
+                <tr>
+                  <th class="title-tabla">Turno</th>
+                  <th class="col-tabla-des title-tabla">Inicio Turno</th>
+                  <th class="col-tabla-valor title-tabla">Total</th>
+                </tr>
+              </table>
+            </div>
+            <h2>Turnos Cerrados</h2>
+            <div class="container py-xl-5 py-lg-3">
+              <table class="tabla_mesas table-striped" id="tablaTurnosCerr">
+                <tr>
+                  <th class="title-tabla">Turno</th>
+                  <th class="title-tabla">Inicio Turno</th>
+                  <th class="title-tabla">Fin Turno</th>
+                  <th class="col-tabla-valor title-tabla">Total</th>
+                </tr>
+              </table>
+              <h1 id="alertaTablaCerr" class="texto-alerta"></h1>
+            </div>
+            <h2>Mesas Activas</h2>
+            <div class="container py-xl-5 py-lg-3">
+              <table class="tabla_mesas table-striped" id="tabla-mesas-id">
+                <tr>
+                  <th class="title-tabla">Item</th>
+                  <th class="col-tabla-des title-tabla">Nombre</th>
+                  <th class="title-tabla">Total</th>
+                </tr>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <!-- copyright -->
+    <div class="cpy-right text-center py-3">
+      <p>
+        © 2023 App Bar | Design by
+        <a> Pedro Castiblanco</a>
+      </p>
+    </div>
+    <!-- //copyright -->
+  </body>
+</html>

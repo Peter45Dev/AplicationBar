@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+<html lang="zxx">
+  <head>
+    <title>Mesas Turno!!</title>
+    <!-- Meta tag Keywords -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="UTF-8" />
+    <meta
+      name="keywords"
+      content="Tasty Burger Responsive web template, Bootstrap Web Templates, Flat Web Templates, Android Compatible web template, Smartphone Compatible web template, free webdesigns for Nokia, Samsung, LG, SonyEricsson, Motorola web design"
+    />
+
+    <script type="module">
+      // Import the functions you need from the SDKs you need
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+      import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-analytics.js";
+      import {
+        getAuth,
+        createUserWithEmailAndPassword,
+      } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+
+      //import {getAuth,onAuthStateChanged,signInWithEmailAndPassword} from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+      import {
+        getDatabase,
+        ref as _ref,
+        set,
+        onValue,
+        get,
+        push,
+        remove,
+      } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyBF6FUMNt82O525pGOVyKm1ZiOhmLzLPmQ",
+        authDomain: "barinicial.firebaseapp.com",
+        databaseURL: "https://barinicial-default-rtdb.firebaseio.com",
+        projectId: "barinicial",
+        storageBucket: "barinicial.appspot.com",
+        messagingSenderId: "722647862157",
+        appId: "1:722647862157:web:f038ba770f0e773d294bc4",
+      };
+
+      // Initialize Firebase
+      const app = initializeApp(firebaseConfig);
+
+      const auth = getAuth();
+      const db = getDatabase();
+
+      let sesionOrden; ////Nombre sesion diaria de usuario para control de mesas activas
+      let arregloMesas = []; ////mesas activas con sus productos
+      let ArrayProd = [];
+      let prodActual; ////producto que se seleccionó de la lista para agregar a una mesa
+      let ProdsMesa = [];
+      let idMesaActual;
+      let idProdBorrar;
+      let inicioTurno; ///fecha de inicio del turno
+      let ObjCtrlSesion; ////sesion diaria de usuario para control de mesas activas
+      let objSesionVentas; ///objeto en tabla sesion que tiene las mesas ya pagadas o vendidas
+      let JsonUser;
+
+      window.onload = init;
+
+      function init() {
+        //const fechaActual = new Date();
+
+        const btn_AgregarMesa = document.getElementById("btn_add_mesa");
+
+        //controlar botones para el rol del usuario y enviar a login sino se ha creado el usuario en el local
+        try {
+          let Userobj = localStorage.getItem("UserData"); //UserData
+          JsonUser = JSON.parse(Userobj);
+          let UserRol = JsonUser.userrole;
+          console.log(UserRol);
+          if (UserRol == "Normal") {
+            const linkInvent = document.getElementById("linkInventario");
+            const linkRegis = document.getElementById("linkRegistro");
+            const linkCarga = document.getElementById("linkCarga");
+
+            linkInvent.style.display = "none";
+            linkRegis.style.display = "none";
+            linkCarga.style.display = "none";
+            console.log("finalizó control usuario");
+          }
+        } catch (error) {
+          location.href = "index.html";
+          console.log(error);
+        }
+
+        //btn cerrar sesion elimina el local y envía al index
+        const CerrarSesion = document.getElementById("CerrarSesionBtn");
+        CerrarSesion.addEventListener("click", function () {
+          localStorage.setItem("UserData", "");
+          location.href = "index.html";
+        });
+
+        // variables para Popup crear mesa
+        const mostrarPopUpBtn = document.getElementById("mostrarPopUp");
+        const popUp = document.getElementById("popUp");
+        const cerrarPopUpBtn = document.getElementById("cerrarPopUp");
+
+        //variables para popup ventas
+        const mostrarPopUpBtnventas = document.getElementById("VerVentas");
+        const popUpventas = document.getElementById("popUpVentas");
+        const cerrarPopUpBtnventas =
+          document.getElementById("cerrarPopUpVentas");
+
+        // variables para Popup crear productos mesa
+        const popUpProd = document.getElementById("popUpProd");
+        const cerrarPopUpBtnProd = document.getElementById("cerrarPopUpProd");
+
+        // variables para Finalizar turno
+        const finturno = document.getElementById("finTurno");
+        finturno.addEventListener("click", function () {
+          terminarTurno();
+        });
+
+        //mostarr popup de mesas
+        mostrarPopUpBtn.addEventListener("click", function () {
+          console.log("mostrar popup");
+          popUp.style.display = "block";
+          const camptexto = document.getElementById("campoTexto");
+          camptexto.focus();
+        });
+
+        //mostrar popupup de ventas
+        mostrarPopUpBtnventas.addEventListener("click", function () {
+          popUpventas.style.display = "block";
+          crearpopupVentas();
+        });
+
+        //variables para botón de pago mesa
+
+        const pagarBtnMesa = document.getElementById("BtnPagoMesa");
+
+        pagarBtnMesa.addEventListener("click", function () {
+          let descuento = seleccionarOpcion();
+          let descTexto = "";
+          console.log("***valor desc", descuento);
+
+          if (descuento === 0) {
+            const resultado = arregloMesas[idMesaActual].total * 0.9;
+
+            arregloMesas[idMesaActual].total = Math.ceil(resultado / 50) * 50;
+
+            descTexto = ", Ganaste 10% descuento!!";
+          } else if (descuento === 1) {
+            const resultado = arregloMesas[idMesaActual].total * 0.93;
+
+            arregloMesas[idMesaActual].total = Math.ceil(resultado / 50) * 50;
+            descTexto = ", Ganaste 7% descuento!!";
+          } else if (descuento === 2) {
+            const resultado = arregloMesas[idMesaActual].total * 0.95;
+
+            arregloMesas[idMesaActual].total = Math.ceil(resultado / 50) * 50;
+            descTexto = ", Ganaste 5% descuento!!";
+          } else {
+            descTexto = "";
+          }
+
+          const pagarBtnMesa = document.getElementById("valor-pago");
+          let cambiopago =
+            pagarBtnMesa.value - arregloMesas[idMesaActual].total;
+          if (
+            pagarBtnMesa.value < arregloMesas[idMesaActual].total ||
+            arregloMesas[idMesaActual].total == 0
+          ) {
+            const alertaCambio = document.getElementById("alertaCambio");
+            alertaCambio.textContent = "El valor es menor al total!!!";
+          } else {
+            const alertaCambio = document.getElementById("alertaCambio");
+
+            alertaCambio.textContent = "";
+
+            alert("el cambio es: " + cambiopago + descTexto);
+            console.log("crear objeto en DB");
+            //función para crear la venta en la DB
+
+            let objMesaCambio = {
+              nombre: arregloMesas[idMesaActual].nombre,
+              cambio: cambiopago,
+              productos: arregloMesas[idMesaActual].productos,
+              total: arregloMesas[idMesaActual].total,
+            };
+
+            ///función que crea la mesa en la tabla sesion
+            consultarVentasSesion(objMesaCambio, inicioTurno);
+
+            eliminarMesa();
+            ConsultarSesion(sesionOrden);
+          }
+        });
+
+        cerrarPopUpBtn.addEventListener("click", function () {
+          const miP = document.getElementById("alerta-mesa");
+          const campoTexto = document.getElementById("campoTexto");
+          miP.textContent = "";
+          campoTexto.value = "";
+          popUp.style.display = "none";
+        });
+
+        cerrarPopUpBtnventas.addEventListener("click", function () {
+          const tabla = document.getElementById("tablaVentasSesion");
+          const filas = tabla.getElementsByTagName("tr");
+
+          for (let i = filas.length - 1; i >= 0; i--) {
+            const fila = filas[i];
+            fila.parentNode.removeChild(fila);
+          }
+
+          popUpventas.style.display = "none";
+        });
+
+        cerrarPopUpBtnProd.addEventListener("click", function () {
+          LimpiarCamposListaProds();
+          ConsultarSesion(sesionOrden);
+        });
+
+        //botón para agregar mesa a la tabla de mesas
+        const crearNuevaMesaBtn = document.getElementById("crearNuevaMesa");
+        crearNuevaMesaBtn.addEventListener("click", CrearNuevaMesaFN);
+
+        //botón para agregar producto a la mesa seleccionada
+        const agregarProdMesa = document.getElementById("AgregarProductoMesa");
+        agregarProdMesa.addEventListener("click", AgregarProductoMesa);
+
+        //botón para eliminar productos de la mesa seleccionada
+        const eliminarProdMesa = document.getElementById(
+          "EliminarProductoMesa"
+        );
+        eliminarProdMesa.addEventListener("click", EliminarProductoMesa);
+
+        // variables para campo de busqueda productos y actualizar lista
+        const campoBusqueda = document.getElementById("campo-busqueda");
+        campoBusqueda.addEventListener("input", ActualizarListaProdBusqueda);
+
+        // calculo de sesion por fecha
+        if (JsonUser.username) {
+          sesionOrden = JsonUser.username;
+          console.log("usuario sesión" + sesionOrden);
+          mostrarSesion(sesionOrden);
+          ConsultarSesion(sesionOrden);
+        } else {
+          alert("Error --- no se encontró usuario en localstorage");
+        }
+
+        llenararregloProductos();
+
+        window.addEventListener("scroll", moverPopupConScroll);
+      }
+
+      //funcion que calcula el descuento aplicable
+      function seleccionarOpcion() {
+        const probabilidades = [0.5, 1, 1.5];
+        const random = Math.random() * 100;
+
+        if (random < probabilidades[0]) {
+          return 0; // Opción 1%
+        } else if (random < probabilidades[0] + probabilidades[1]) {
+          return 1; // Opción 3%
+        } else if (
+          random <
+          probabilidades[0] + probabilidades[1] + probabilidades[2]
+        ) {
+          return 2; // Opción 5%
+        } else {
+          return -1; // Perder
+        }
+      }
+
+      //funcion para finalizar el turno
+      function terminarTurno() {
+        if (arregloMesas.length > 0) {
+          alert("No puede finalizar el turno ya que tiene mesas activas!");
+          console.log("mesas", arregloMesas);
+        } else {
+          console.log("crear función que guarde la fecha fin del turno");
+          //funcion para preguntar por ctrlsesion
+          hayctrlsesion(sesionOrden);
+        }
+      }
+
+      function hayctrlsesion(sesion) {
+        console.log("entro a buscar sesion ctrlsesion");
+        const objetoId = sesion;
+
+        // Ruta del objeto dentro de "productos"
+        const rutaObjeto = `ctrlsesion/${objetoId}`;
+
+        // Referencia a la ubicación del objeto en la base de datos
+        const objetoRef = _ref(db, rutaObjeto);
+
+        // Obtener el valor actual del objeto
+        get(objetoRef)
+          .then((snapshot) => {
+            const objeto = snapshot.val();
+            console.log("objeto consulta", objeto);
+
+            if (objeto) {
+              ////se va a eliminar el objeto ctrlsesion
+              return remove(objetoRef);
+              localStorage.setItem("UserData", "");
+              location.href = "index.html";
+            } else {
+              alert("no se encontró ctrlsesion");
+            }
+          })
+          .then(() => {
+            // Función para colocar fin de la sesión
+            colocarfindesesion();
+            //alert("ctrlsesion borrado");
+          })
+          .catch((error) => {
+            console.error("Error al obtener/eliminar el objeto:", error);
+          });
+      }
+
+      function colocarfindesesion() {
+        // Obtén la fecha de ObjCtrlSesion y conviértela al formato deseado
+        const fechaHoraActual = new Date();
+        const horaActual = fechaHoraActual.toLocaleTimeString();
+
+        const dia = fechaHoraActual.getDate().toString().padStart(2, "0");
+        const mes = (fechaHoraActual.getMonth() + 1)
+          .toString()
+          .padStart(2, "0");
+        const anio = fechaHoraActual.getFullYear();
+
+        const fechaActual = `${dia}-${mes}-${anio}`;
+
+        let finturno = fechaActual + "#" + horaActual;
+        const sistOper = navigator.platform;
+
+        let fechaI = ObjCtrlSesion.fechainicio.split("#");
+        const fecha = fechaI[0].replace(/\//g, "-");
+        const usuario = ObjCtrlSesion.nombre;
+
+        // Ruta del objeto dentro de "sesion"
+
+        //console.log("la fecha par buscar sesion", fecha);
+        const rutaObjeto = `sesion/${fecha}/${usuario}`;
+
+        // Referencia a la ubicación del objeto en la base de datos
+        const referencia = _ref(db, rutaObjeto);
+
+        // Utiliza la función get() para obtener los datos en lugar de once()
+        get(referencia)
+          .then((snapshot) => {
+            if (snapshot.exists()) {
+              // Si no existe el nodo con la fecha, créalo
+
+              push(_ref(db, `sesion/${fecha}/${usuario}`), {
+                fechafin: finturno,
+                equipo: sistOper,
+              });
+              localStorage.setItem("UserData", "");
+              location.href = "index.html";
+            } else {
+              console.log("error, no encontró sesion");
+            }
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+          });
+      }
+
+      //funcion que elimina la mesa que se acaba de pagar
+      function eliminarMesa() {
+        /*console.log("---Id mesa Act.", idMesaActual);
+        console.log("arreglomesas", arregloMesas);*/
+        arregloMesas.splice(idMesaActual, 1);
+        ObjCtrlSesion.Mesas = arregloMesas;
+        //console.log("---objeto sesión", ObjCtrlSesion);
+        crearProducto(ObjCtrlSesion);
+        LimpiarCamposListaProds();
+        llenarTablaMesas();
+      }
+
+      function crearpopupVentas() {
+        let tituloPop = document.getElementById("ventasTurno");
+
+        if (objSesionVentas == undefined) {
+          tituloPop.textContent = "No hay ventas para este Turno!";
+        } else {
+          const objeto = objSesionVentas;
+          const tablaVentas = document.getElementById("tablaVentasSesion");
+          let turno;
+          let fecha;
+
+          //crearlabeltabla
+          const nuevaFila = tablaVentas.insertRow();
+          nuevaFila.classList.add("title-tabla");
+
+          //creación de celda item
+          const nuevaCelda = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+          nuevaCelda.textContent = "Nombre";
+          nuevaCelda.classList.add("celda-tabla");
+
+          //creación de celda item
+          const nuevaCelda1 = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+          nuevaCelda1.textContent = "Total";
+          nuevaCelda1.classList.add("celda-tabla");
+
+          //creación de celda item
+          const nuevaCelda2 = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+          nuevaCelda2.textContent = "Cambio";
+          nuevaCelda2.classList.add("celda-tabla");
+
+          for (const key in objeto) {
+            if (objeto[key].fechainicio) {
+              turno = objeto[key].fechainicio.split("-");
+              fecha = turno[0].replace(/\//g, "-");
+            } else if (objeto[key].mesas) {
+              //crearlabeltabla
+              const nuevaFila = tablaVentas.insertRow();
+              nuevaFila.classList.add("fila-tabla");
+
+              //creación de celda item
+              const nuevaCelda = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+              nuevaCelda.textContent = objeto[key].mesas.nombre;
+              nuevaCelda.classList.add("celda-tabla");
+
+              //creación de celda item
+              const nuevaCelda1 = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+              nuevaCelda1.textContent = objeto[key].mesas.total;
+              nuevaCelda1.classList.add("celda-tabla");
+
+              //creación de celda item
+              const nuevaCelda2 = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+              nuevaCelda2.textContent = objeto[key].mesas.cambio;
+              nuevaCelda2.classList.add("celda-tabla");
+            }
+          }
+
+          tituloPop.textContent = "Ventas para el turno " + fecha;
+        }
+      }
+
+      function LimpiarCamposListaProds() {
+        const alertaprod = document.getElementById("alerta-agregar");
+        const campocantidad = document.getElementById("cantidad-producto");
+        const campobusqueda = document.getElementById("campo-busqueda");
+        const campototalmesa = document.getElementById("CampoTotalMesa");
+        const campovalorpago = document.getElementById("valor-pago");
+        const alertaCambio = document.getElementById("alertaCambio");
+
+        alertaCambio.textContent = "";
+        alertaprod.textContent = "";
+        campototalmesa.textContent = "0";
+        campocantidad.value = "";
+        campobusqueda.value = "";
+        campovalorpago.value = "";
+        popUpProd.style.display = "none";
+
+        //Limpiar tabla productos
+        const tabla = document.getElementById("tabla-productos-id");
+        const filas = tabla.getElementsByTagName("tr");
+
+        for (let i = filas.length - 1; i > 0; i--) {
+          const fila = filas[i];
+          fila.parentNode.removeChild(fila);
+        }
+      }
+
+      function ActualizarListaProdBusqueda() {
+        const lista = document.getElementById("lista");
+        const campBusqueda = document.getElementById("campo-busqueda");
+
+        //limpiar lista para llenarla de nuevo
+        while (lista.firstChild) {
+          lista.removeChild(lista.firstChild);
+        }
+
+        if (campBusqueda.value == "") {
+          ArrayProd.forEach((elemento) => {
+            const li = document.createElement("li");
+            li.textContent = elemento.nombre;
+            li.classList.add("list-group-item", "list-group-item-action");
+            li.addEventListener("click", function () {
+              console.log("Elemento seleccionado:", elemento);
+              prodActual = elemento;
+              seleccionarElementoLista(lista);
+              this.classList.add("selected");
+            });
+            lista.appendChild(li);
+          });
+        } else {
+          const arrayProdBusqueda = [];
+          //Crear arreglo con los elementos comunes en el campo de busqueda
+          ArrayProd.forEach((el) => {
+            let name = el.nombre;
+            let nameMin = name.toLowerCase();
+            let busquedaMin = campBusqueda.value.toLowerCase();
+
+            if (nameMin.includes(busquedaMin)) {
+              arrayProdBusqueda.push(el);
+            }
+          });
+
+          arrayProdBusqueda.forEach((elemento) => {
+            const li = document.createElement("li");
+            li.textContent = elemento.nombre;
+            li.classList.add("list-group-item", "list-group-item-action");
+            li.addEventListener("click", function () {
+              console.log("Elemento seleccionado:", elemento);
+              prodActual = elemento;
+              seleccionarElementoLista(lista);
+              this.classList.add("selected");
+            });
+            lista.appendChild(li);
+          });
+        }
+      }
+
+      function AgregarProductoMesa() {
+        ///  validación de campos vacios
+        const campBusqueda = document.getElementById("campo-busqueda");
+        const campCantidad = document.getElementById("cantidad-producto");
+        const textoAlerta = document.getElementById("alerta-agregar");
+        if (
+          prodActual == undefined ||
+          campCantidad.value == undefined ||
+          campCantidad.value == 0 ||
+          campCantidad.value < 0
+        ) {
+          textoAlerta.textContent = "Selecciona un producto y una cantidad.";
+        } else {
+          const fechaHoraActual = new Date();
+          const horaActual = fechaHoraActual.toLocaleTimeString();
+          const prodAddMesa = prodActual;
+
+          prodAddMesa.hora = horaActual;
+          prodAddMesa.cantidad = campCantidad.value;
+          prodAddMesa.valortotal = prodActual.precio * campCantidad.value;
+
+          console.log("prod Add MEsa", prodAddMesa);
+
+          arregloMesas[idMesaActual].productos.push(prodAddMesa);
+          arregloMesas[idMesaActual].total = calcularTotalMesa(
+            arregloMesas[idMesaActual].productos
+          );
+
+          ObjCtrlSesion.Mesas = arregloMesas;
+          console.log("vobjeto sesión", ObjCtrlSesion);
+          crearProducto(ObjCtrlSesion);
+          ActualizarTablaProds(prodAddMesa, arregloMesas[idMesaActual].total);
+          // modulo que limpia el campo de busqueda y el campo cantidad y la alerta
+
+          campBusqueda.value = "";
+          campCantidad.value = "";
+          textoAlerta.textContent = "";
+          prodActual = undefined;
+          ActualizarListaProdBusqueda();
+        }
+      }
+
+      function EliminarProductoMesa() {
+        ///  validación de campos vacios
+
+        const textoAlerta = document.getElementById("alerta-borrar-prod");
+        if (idProdBorrar == undefined || idProdBorrar == "") {
+          textoAlerta.textContent = "Selecciona un producto para eliminar.";
+        } else {
+          console.log("id del item a borrar", idProdBorrar);
+          if (arregloMesas[idMesaActual].productos.length > 1) {
+            arregloMesas[idMesaActual].productos.splice(idProdBorrar, 1);
+          } else {
+            arregloMesas[idMesaActual].productos = [];
+          }
+          arregloMesas[idMesaActual].total = calcularTotalMesa(
+            arregloMesas[idMesaActual].productos
+          );
+
+          ObjCtrlSesion.Mesas = arregloMesas;
+          console.log("productos mesa", arregloMesas[idMesaActual].productos);
+          console.log("objeto sesión", ObjCtrlSesion);
+          crearProducto(ObjCtrlSesion);
+          //Limpiar tabla productos
+          const tabla = document.getElementById("tabla-productos-id");
+          const filas = tabla.getElementsByTagName("tr");
+
+          for (let i = filas.length - 1; i > 0; i--) {
+            const fila = filas[i];
+            fila.parentNode.removeChild(fila);
+          }
+          //llenar tabla de nuevo
+          LLenarTablaProdSesion(arregloMesas[idMesaActual]);
+          textoAlerta.textContent = "";
+        }
+      }
+
+      function ActualizarTablaProds(obj, total) {
+        const campoTotalMesa = document.getElementById("CampoTotalMesa");
+        const miTabla = document.getElementById("tabla-productos-id");
+        const filas = miTabla.getElementsByTagName("tr");
+
+        const nuevaFila = miTabla.insertRow();
+        nuevaFila.classList.add("fila-tabla");
+        nuevaFila.setAttribute("item", filas.length - 2);
+
+        //agrega evento qeu nos va a mostrar los productos de cada mesa
+
+        nuevaFila.addEventListener("click", (event) => {
+          const dataId = nuevaFila.getAttribute("item");
+          idProdBorrar = dataId;
+          //función para eliminar el producto seleccionado
+          //mostrarProductosMesa(dataId);
+        });
+
+        //creación de celda item
+        const nuevaCelda = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+        nuevaCelda.textContent = obj.hora;
+        nuevaCelda.classList.add("celda-tabla");
+        const nuevaCelda1 = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+        nuevaCelda1.textContent = obj.descripcion;
+        nuevaCelda1.classList.add("celda-tabla");
+        const nuevaCelda2 = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+        nuevaCelda2.textContent = obj.cantidad;
+        nuevaCelda2.classList.add("celda-tabla");
+        const nuevaCelda3 = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+        nuevaCelda3.textContent = obj.precio;
+        nuevaCelda3.classList.add("celda-tabla");
+        const nuevaCelda4 = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+        nuevaCelda4.textContent = obj.valortotal;
+        nuevaCelda4.classList.add("celda-tabla");
+
+        campoTotalMesa.textContent = total;
+      }
+
+      function LLenarTablaProdSesion(mesa) {
+        const campoTotalMesa = document.getElementById("CampoTotalMesa");
+        const miTabla = document.getElementById("tabla-productos-id");
+        const filas = miTabla.getElementsByTagName("tr");
+        //console.log("prodyctos", mesa.productos);
+        if (mesa.productos != []) {
+          mesa.productos.forEach(function (i) {
+            const nuevaFila = miTabla.insertRow();
+            nuevaFila.classList.add("fila-tabla");
+            nuevaFila.setAttribute("item", filas.length - 2);
+
+            //agrega evento qeu nos va a mostrar los productos de cada mesa
+
+            nuevaFila.addEventListener("click", (event) => {
+              const dataId = nuevaFila.getAttribute("item");
+              idProdBorrar = dataId;
+              //función para eliminar el producto seleccionado
+              //mostrarProductosMesa(dataId);
+            });
+
+            //creación de celda item
+            const nuevaCelda = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+            nuevaCelda.textContent = i.hora;
+            nuevaCelda.classList.add("celda-tabla");
+            const nuevaCelda1 = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+            nuevaCelda1.textContent = i.descripcion;
+            nuevaCelda1.classList.add("celda-tabla");
+            const nuevaCelda2 = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+            nuevaCelda2.textContent = i.cantidad;
+            nuevaCelda2.classList.add("celda-tabla");
+            const nuevaCelda3 = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+            nuevaCelda3.textContent = i.precio;
+            nuevaCelda3.classList.add("celda-tabla");
+            const nuevaCelda4 = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+            nuevaCelda4.textContent = i.valortotal;
+            nuevaCelda4.classList.add("celda-tabla");
+          });
+
+          campoTotalMesa.textContent = mesa.total;
+        }
+      }
+
+      function crearProducto(objProd) {
+        const db = getDatabase();
+
+        set(_ref(db, `ctrlsesion/${objProd.nombre}`), objProd).then(() => {
+          console.log("producto agregado a la mesa");
+          //location.href = "index.html";
+          //limpiarCamposForm();
+        });
+      }
+
+      function calcularTotalMesa(arregloProd) {
+        console.log("arreglo Prod", arregloProd);
+        // Inicializa una variable para la suma total
+        let sumaTotal = 0;
+
+        // Utiliza forEach para recorrer el arreglo y sumar los valores
+        arregloProd.forEach(function (producto) {
+          sumaTotal += producto.valortotal;
+        });
+        return sumaTotal;
+      }
+
+      function llenararregloProductos() {
+        onValue(_ref(db, "/productos"), (snapshot) => {
+          // console.log(snapshot);
+          procesarDatos(snapshot.val());
+        });
+      }
+
+      function procesarDatos(data) {
+        ArrayProd = [];
+
+        for (var i in data) {
+          ArrayProd.push(data[i]);
+        }
+
+        console.log("consultaDB", ArrayProd);
+      }
+
+      function mostrarSesion(sesion) {
+        const spanElement = document.getElementById("spanElement");
+        spanElement.textContent = sesion;
+      }
+
+      function consultarVentasSesion(mesa, objs) {
+        // Obtén la fecha de ObjCtrlSesion y conviértela al formato deseado
+        let fechaI = ObjCtrlSesion.fechainicio.split("#");
+        const fecha = fechaI[0].replace(/\//g, "-");
+        const usuario = ObjCtrlSesion.nombre;
+
+        // Ruta del objeto dentro de "sesion"
+        const rutaObjeto = `sesion/${fecha}`;
+
+        // Referencia a la ubicación del objeto en la base de datos
+        const referencia = _ref(db, rutaObjeto);
+
+        // Utiliza la función get() para obtener los datos en lugar de once()
+        get(referencia)
+          .then((snapshot) => {
+            if (!snapshot.exists()) {
+              // Si no existe el nodo con la fecha, créalo
+              push(_ref(db, `sesion/${fecha}/${usuario}`), { mesas: mesa });
+              push(_ref(db, `sesion/${fecha}/${usuario}`), {
+                fechainicio: objs,
+              });
+            } else if (!snapshot.child(usuario).exists()) {
+              // Si existe el nodo con la fecha pero no el usuario, agrégalo
+              push(_ref(db, `sesion/${fecha}/${usuario}`), { mesas: mesa });
+              push(_ref(db, `sesion/${fecha}/${usuario}`), {
+                fechainicio: objs,
+              });
+            } else {
+              // Si existe el nodo con la fecha y el usuario, agrega el atributo "mesa"
+              push(_ref(db, `sesion/${fecha}/${usuario}`), { mesas: mesa });
+            }
+
+            console.log("Operación completada con éxito.");
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+          });
+
+        LimpiarCamposListaProds();
+      }
+
+      /*function ConsultarSesion(sesion) {
+        console.log("entro a mostrar datos de la DB");
+        const objetoId = sesion;
+
+        // Ruta del objeto dentro de "productos"
+        const rutaObjeto = `ctrlsesion/${objetoId}`;
+
+        // Referencia a la ubicación del objeto en la base de datos
+        const objetoRef = _ref(db, rutaObjeto);
+
+        // Escucha cambios en la ubicación del objeto
+        onValue(
+          objetoRef,
+          (snapshot) => {
+            const objeto = snapshot.val();
+
+            if (objeto) {
+              console.log("Objeto encontrado:", objeto);
+              // Realiza acciones con los datos del objeto aquí crear función para mostrar mesas
+              ObjCtrlSesion = objeto;
+              if (objeto.Mesas == undefined) {
+                arregloMesas = [];
+              } else {
+                arregloMesas = objeto.Mesas;
+                VerificarProdsMesas();
+              }
+              inicioTurno = objeto.fechainicio;
+              console.log("muestra arreglomesas", arregloMesas);
+
+              llenarTablaMesas();
+              consultarSesionVentas(inicioTurno); //funcion para buscar el total vendido
+            } else {
+              console.log("Objeto no encontrado.");
+              const fechaHoraActual = new Date();
+              const horaActual = fechaHoraActual.toLocaleTimeString();
+              const fechaActual = fechaHoraActual.toLocaleDateString();
+              inicioTurno = fechaActual + "-" + horaActual;
+
+              ObjCtrlSesion = {
+                nombre: sesion,
+                fechainicio: inicioTurno,
+                Mesas: [],
+              };
+              alert("turno nuevo");
+            }
+          },
+          (error) => {
+            console.error("Error al obtener el objeto:", error);
+          }
+        );
+      }*/
+
+      function ConsultarSesion(sesion) {
+        console.log("entro a mostrar datos de la DB");
+        const objetoId = sesion;
+
+        // Ruta del objeto dentro de "productos"
+        const rutaObjeto = `ctrlsesion/${objetoId}`;
+
+        // Referencia a la ubicación del objeto en la base de datos
+        const objetoRef = _ref(db, rutaObjeto);
+
+        // Realiza una consulta única para obtener los datos
+        get(objetoRef)
+          .then((snapshot) => {
+            const objeto = snapshot.val();
+
+            if (objeto) {
+              console.log("Objeto encontrado:", objeto);
+              // Realiza acciones con los datos del objeto aquí crear función para mostrar mesas
+              ObjCtrlSesion = objeto;
+              if (objeto.Mesas == undefined) {
+                arregloMesas = [];
+              } else {
+                arregloMesas = objeto.Mesas;
+                VerificarProdsMesas();
+              }
+              inicioTurno = objeto.fechainicio;
+              console.log("muestra arreglomesas", arregloMesas);
+
+              llenarTablaMesas();
+              consultarSesionVentas(inicioTurno); //función para buscar el total vendido
+            } else {
+              console.log("Objeto no encontrado.");
+              const fechaHoraActual = new Date();
+              const horaActual = fechaHoraActual.toLocaleTimeString();
+
+              const dia = fechaHoraActual.getDate().toString().padStart(2, "0");
+              const mes = (fechaHoraActual.getMonth() + 1)
+                .toString()
+                .padStart(2, "0");
+              const anio = fechaHoraActual.getFullYear();
+
+              const fechaActual = `${dia}-${mes}-${anio}`;
+              inicioTurno = fechaActual + "#" + horaActual;
+
+              ObjCtrlSesion = {
+                nombre: sesion,
+                fechainicio: inicioTurno,
+                Mesas: [],
+              };
+              alert("turno nuevo");
+            }
+          })
+          .catch((error) => {
+            console.error("Error al obtener el objeto:", error);
+          });
+        //console.log("**objeto Ctrlsesion", ObjCtrlSesion);
+      }
+
+      function consultarSesionVentas(inicioturno) {
+        let fechaI = inicioturno.split("#");
+        const fecha = fechaI[0].replace(/\//g, "-");
+        console.log("entro a mostrar datos de la DB");
+        const objetoId = sesionOrden;
+
+        // Ruta del objeto dentro de "productos"
+        const rutaObjeto = `sesion/${fecha}/${objetoId}`;
+
+        // Referencia a la ubicación del objeto en la base de datos
+        const objetoRef = _ref(db, rutaObjeto);
+
+        // Escucha cambios en la ubicación del objeto
+        onValue(
+          objetoRef,
+          (snapshot) => {
+            const objeto = snapshot.val();
+
+            if (objeto) {
+              console.log("Objeto encontrado en ventas:", objeto);
+              // Realiza acciones con los datos del objeto aquí crear función para mostrar mesas
+              objSesionVentas = objeto;
+
+              calcularTotalVendido(objeto);
+            } else {
+              console.log("no hay ventas.");
+            }
+          },
+          (error) => {
+            console.error("Error al obtener el objeto de ventas:", error);
+          }
+        );
+      }
+
+      function calcularTotalVendido(objeto) {
+        let sumaVentasTotal = 0;
+        const totalVentas = document.getElementById("totalVentas");
+
+        for (const key in objeto) {
+          if (objeto[key].mesas && objeto[key].mesas.total) {
+            console.log("valor total mesa", objeto[key].mesas.total);
+            sumaVentasTotal += objeto[key].mesas.total;
+          }
+        }
+        totalVentas.textContent = sumaVentasTotal;
+      }
+
+      function VerificarProdsMesas() {
+        arregloMesas.forEach((element) => {
+          if (element.productos == undefined) {
+            element.productos = [];
+          }
+        });
+      }
+
+      function CrearNuevaMesaFN() {
+        const campoTexto = document.getElementById("campoTexto");
+        const popUp = document.getElementById("popUp");
+        const miP = document.getElementById("alerta-mesa");
+        const textoIngresado = campoTexto.value.toLowerCase();
+
+        if (arregloMesas === undefined) {
+          miP.textContent = "";
+          const nuevoObjeto = {
+            nombre: campoTexto.value,
+            total: 0,
+            productos: [],
+          };
+          arregloMesas.push(nuevoObjeto);
+
+          console.log("objeto mesas", arregloMesas);
+          popUp.style.display = "none";
+          // función para obtener y agregar un nuevo registro a las mesas del localstorage
+          localStorage.setItem("ArregloMesas", JSON.stringify(arregloMesas));
+          agregarItemTabla(nuevoObjeto);
+          campoTexto.value = "";
+        } else {
+          const objetoEncontrado = arregloMesas.find(
+            (objeto) => objeto.nombre.toLowerCase() === textoIngresado
+          );
+
+          if (objetoEncontrado || textoIngresado == "") {
+            console.log("Objeto encontrado:", objetoEncontrado);
+
+            miP.textContent = "El Nombre de mesa ya existe o está vacío.";
+          } else {
+            miP.textContent = "";
+            const nuevoObjeto = {
+              nombre: campoTexto.value,
+              total: 0,
+              productos: [],
+            };
+            arregloMesas.push(nuevoObjeto);
+
+            console.log("objeto mesas", arregloMesas);
+            popUp.style.display = "none";
+            // función para obtener y agregar un nuevo registro a las mesas del localstorage
+            localStorage.setItem("ArregloMesas", JSON.stringify(arregloMesas));
+            agregarItemTabla(nuevoObjeto);
+            campoTexto.value = "";
+          }
+        }
+      }
+
+      function agregarItemTabla(objeto) {
+        const miTabla = document.getElementById("tabla-mesas-id");
+        const filas = miTabla.getElementsByTagName("tr");
+
+        const nuevaFila = miTabla.insertRow();
+        nuevaFila.classList.add("fila-tabla");
+        nuevaFila.setAttribute("item", filas.length - 2);
+
+        //agrega evento qeu nos va a mostrar los productos de cada mesa
+
+        nuevaFila.addEventListener("click", (event) => {
+          const dataId = nuevaFila.getAttribute("item");
+          idMesaActual = dataId;
+          mostrarProductosMesa(dataId);
+        });
+
+        //creación de celda item
+        const nuevaCelda = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+        nuevaCelda.textContent = filas.length - 1;
+        nuevaCelda.classList.add("celda-tabla");
+        const nuevaCelda1 = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+        nuevaCelda1.textContent = objeto.nombre;
+        nuevaCelda1.classList.add("celda-tabla");
+        const nuevaCelda2 = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+        nuevaCelda2.textContent = objeto.total;
+        nuevaCelda2.classList.add("celda-tabla");
+      }
+
+      function llenarTablaMesas() {
+        limpiarTablaMesas();
+        const miTabla = document.getElementById("tabla-mesas-id");
+
+        let ctrlItem = 0;
+        for (var i in arregloMesas) {
+          const nuevaFila = miTabla.insertRow();
+          nuevaFila.classList.add("fila-tabla");
+          nuevaFila.setAttribute("item", ctrlItem);
+
+          //agrega evento qeu nos va a mostrar los productos de cada mesa
+
+          nuevaFila.addEventListener("click", (event) => {
+            const dataId = nuevaFila.getAttribute("item");
+            idMesaActual = dataId;
+            mostrarProductosMesa(dataId);
+          });
+
+          //creación de celda item
+          const nuevaCeldai = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+          nuevaCeldai.textContent = ++ctrlItem;
+          nuevaCeldai.classList.add("celda-tabla");
+          for (const atributo in arregloMesas[i]) {
+            let objetoPuntual = arregloMesas[i];
+            //console.log("atributo", objetoPuntual[atributo], arregloMesas[i]);
+            // Agregar una nueva celda en la fila
+            if (atributo == "total") {
+              const nuevaCelda = nuevaFila.insertCell();
+              nuevaCelda.textContent = objetoPuntual[atributo];
+              nuevaCelda.classList.add("celda-tabla");
+            } else if (atributo == "nombre") {
+              const nuevaCelda = nuevaFila.insertCell();
+              nuevaCelda.textContent = objetoPuntual[atributo];
+              nuevaCelda.classList.add("celda-tabla");
+            }
+          }
+        }
+      }
+
+      function limpiarTablaMesas() {
+        const tabla = document.getElementById("tabla-mesas-id");
+        const filas = tabla.getElementsByTagName("tr");
+
+        for (let i = filas.length - 1; i > 0; i--) {
+          const fila = filas[i];
+          fila.parentNode.removeChild(fila);
+        }
+      }
+
+      function mostrarProductosMesa(iden) {
+        const popUpProd = document.getElementById("popUpProd");
+        const NombreMesa = document.getElementById("nombreMesa");
+        popUpProd.style.display = "block";
+        NombreMesa.textContent = arregloMesas[iden].nombre;
+
+        //función para crear lista de productos
+        llenarListaProductos(ArrayProd);
+        //funcion para llenar la tabla de prouctos agregados
+        LLenarTablaProdSesion(arregloMesas[iden]);
+      }
+
+      function llenarListaProductos(arreglo) {
+        const lista = document.getElementById("lista");
+
+        //limpiar lista por si hay algun item
+        while (lista.firstChild) {
+          lista.removeChild(lista.firstChild);
+        }
+
+        //llenar lista con productos
+
+        arreglo.forEach((elemento) => {
+          const li = document.createElement("li");
+          li.textContent = elemento.nombre;
+          li.classList.add("list-group-item", "list-group-item-action");
+          li.addEventListener("click", function () {
+            console.log("Elemento seleccionado:", elemento);
+            prodActual = elemento;
+            seleccionarElementoLista(lista);
+            this.classList.add("selected");
+          });
+          lista.appendChild(li);
+        });
+      }
+
+      function seleccionarElementoLista(lista) {
+        const elementos = lista.getElementsByTagName("li");
+
+        for (let j = 0; j < elementos.length; j++) {
+          elementos[j].classList.remove("selected");
+        }
+      }
+
+      ///funcion para mover el popup con el scroll
+      function moverPopupConScroll() {
+        const popup = document.getElementById("popUpProdBL");
+        const scrollTop = window.scrollY || document.documentElement.scrollTop;
+
+        // Calcula la nueva posición vertical del popup
+        const nuevaPosicionVertical =
+          window.innerHeight / 2 -
+          popup.clientHeight / 2 +
+          scrollTop +
+          window.innerHeight / 2.5;
+
+        // Aplica la nueva posición vertical al estilo del popup
+        popup.style.top = `${nuevaPosicionVertical}px`;
+      }
+    </script>
+    <!--// Meta tag Keywords -->
+
+    <!-- Custom-Files -->
+    <link rel="stylesheet" href="css/bootstrap.css" />
+    <!-- Bootstrap-Core-CSS -->
+    <link
+      href="css/css_slider.css"
+      type="text/css"
+      rel="stylesheet"
+      media="all"
+    />
+    <!-- css slider -->
+    <link rel="stylesheet" href="css/style.css" type="text/css" media="all" />
+    <!-- Style-CSS -->
+    <link href="css/font-awesome.min.css" rel="stylesheet" />
+    <!-- Font-Awesome-Icons-CSS -->
+    <!-- //Custom-Files -->
+
+    <!-- Web-Fonts -->
+    <link
+      href="//fonts.googleapis.com/css?family=Lato:100,100i,300,300i,400,400i,700,700i,900,900i&amp;subset=latin-ext"
+      rel="stylesheet"
+    />
+    <link
+      href="//fonts.googleapis.com/css?family=Barlow+Semi+Condensed:100,100i,200,200i,300,300i,400,400i,500,500i,600,600i,700,700i,800,800i,900,900i"
+      rel="stylesheet"
+    />
+    <!-- //Web-Fonts -->
+  </head>
+  <body>
+    <!-- header -->
+    <header id="home">
+      <!-- top-bar -->
+      <div class="top-bar py-2 border-bottom">
+        <div class="container">
+          <div class="row middle-flex">
+            <div
+              class="col-xl-7 col-md-5 top-social-agile mb-md-0 mb-1 text-lg-left text-center"
+            >
+              <div class="row">
+                <div class="col-xl-3 col-6 header-top_w3layouts">
+                  <p class="text-da">
+                    <span class="fa fa-map-marker mr-2"></span>Engativá, Bogotá
+                  </p>
+                </div>
+                <div class="col-xl-3 col-6 header-top_w3layouts">
+                  <p class="text-da">
+                    <span class="fa fa-phone mr-2"></span>3015134793
+                  </p>
+                </div>
+                <div class="col-xl-6"></div>
+              </div>
+            </div>
+            <div
+              class="col-xl-5 col-md-7 top-social-agile text-md-right text-center pr-sm-0 mt-md-0 mt-2"
+            >
+              <div class="row middle-flex">
+                <div class="col-lg-5 col-4 top-w3layouts p-md-0 text-right">
+                  <!-- login -->
+                  <a
+                    href="index.html"
+                    class="btn login-button-2 text-uppercase text-wh"
+                  >
+                    <span class="fa fa-sign-in mr-2"></span>Login</a
+                  >
+                  <!-- //login --><!-- login -->
+                </div>
+                <div class="col-lg-7 col-8 social-grid-w3">
+                  <button
+                    type="button"
+                    class="btn submit-contact ml-auto"
+                    id="CerrarSesionBtn"
+                  >
+                    Cerrar Sesión
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="main-top py-1">
+      <div class="container">
+        <div class="nav-content">
+          <!-- logo -->
+          <h1>
+            <a id="logo" class="logo" href="index.html">
+              <img src="images/logo.png" alt="" class="img-fluid" /><span
+                >BAR</span
+              >
+              App
+            </a>
+          </h1>
+          <!-- //logo -->
+          <!-- nav -->
+          <div class="nav_web-dealingsls">
+            <nav>
+              <label for="drop" class="toggle">Menu</label>
+              <input type="checkbox" id="drop" />
+              <ul class="menu">
+                <li id="linkInventario">
+                  <a href="inventario.html">Inventario</a>
+                </li>
+                <li><a href="menu.html">Productos</a></li>
+                <li id="linkRegistro">
+                  <a href="register.html">Registrar Usuario</a>
+                </li>
+                <li id="linkCarga">
+                  <a href="loadform.html">Cargar Producto</a>
+                </li>
+                <li><a href="sesiones.html">Sesiones</a></li>
+              </ul>
+            </nav>
+          </div>
+          <!-- //nav -->
+        </div>
+      </div>
+    </div>
+
+    <section>
+      <div class="breadcrumb-agile bg-light py-2">
+        <ol class="breadcrumb bg-light m-0">
+          <li class="breadcrumb-item">
+            <a href="index.html">Home</a>
+          </li>
+          <li class="breadcrumb-item active" aria-current="page">About Us</li>
+        </ol>
+      </div>
+
+      <section class="w3ls-bnrbtm py-5" id="about">
+        <div class="container py-xl-5 py-lg-3">
+          <div class="title-section text-center mb-md-5 mb-4">
+            <h3 class="w3ls-title mb-3">
+              Pedidos Turno <span id="spanElement">pedidos</span>
+            </h3>
+          </div>
+        </div>
+      </section>
+      <div class="container py-xl-5 py-lg-3">
+        <button
+          type="button"
+          class="btn submit-contact ml-auto"
+          id="mostrarPopUp"
+        >
+          Agregar Mesa
+        </button>
+      </div>
+      <div class="container py-xl-5 py-lg-3">
+        <table class="tabla_mesas" id="tabla-mesas-id">
+          <tr>
+            <th class="title-tabla">Item</th>
+            <th class="col-tabla-des title-tabla">Nombre</th>
+            <th class="title-tabla">Total</th>
+          </tr>
+        </table>
+      </div>
+      <div class="container py-xl-5 py-lg-3, elementos-extrem-fila">
+        <div class="elementos-flex">
+          <h2>Total vendido:&nbsp</h2>
+          <h2 id="totalVentas">0</h2>
+        </div>
+        <div>
+          <button type="button" class="btn-general" id="VerVentas">
+            Ventas
+          </button>
+        </div>
+      </div>
+      <div class="container py-xl-5 py-lg-3, elementos-extrem-fila">
+        <div>
+          <button
+            type="button"
+            class="btn submit-contact ml-auto"
+            id="finTurno"
+          >
+            Finalizar Turno
+          </button>
+        </div>
+      </div>
+
+      <!-- //pop up para agregar el nombre de la mesa -->
+      <div id="popUp" class="modal">
+        <div class="modal-content">
+          <span class="cerrar" id="cerrarPopUp">&times;</span>
+          <h2>Ingresa nueva mesa</h2>
+          <div><p class="texto-alerta" id="alerta-mesa"></p></div>
+          <input type="text" id="campoTexto" placeholder="Nombre de mesa" />
+          <button id="crearNuevaMesa" class="btn-general">Crear</button>
+        </div>
+      </div>
+      <!-- //pop up para las ventas -->
+      <div id="popUpVentas" class="modal">
+        <div class="modal-content">
+          <span class="cerrar" id="cerrarPopUpVentas">&times;</span>
+          <h2 id="ventasTurno" class="titulos-cuadros-prop"></h2>
+          <div class="contenedor_tabla_scroll_doble">
+            <table id="tablaVentasSesion" class="tabla_mesas"></table>
+          </div>
+        </div>
+      </div>
+      <!-- //pop up para agregar productos a la mesa -->
+      <div id="popUpProd" class="modal">
+        <div class="modal-content-prod" id="popUpProdBL">
+          <span class="cerrar" id="cerrarPopUpProd">&times;</span>
+          <h2 id="nombreMesa" class="titulos-cuadros-prop"></h2>
+          <div><p class="texto-alerta" id="alerta-mesa"></p></div>
+          <div class="parent-lista">
+            <div class="lista-container div-lista">
+              <ul id="lista" class="list-group">
+                <!-- Los elementos se agregarán dinámicamente aquí -->
+              </ul>
+            </div>
+            <div class="div-busqueda">
+              <label for="producto">Buscar producto:</label>
+              <br />
+              <input
+                type="text"
+                id="campo-busqueda"
+                placeholder="Nombre de producto"
+                name="producto"
+              />
+            </div>
+            <div class="div-cantidad">
+              <label for="Cantidad">Cantidad:</label>
+              <br />
+              <input type="number" name="Cantidad" id="cantidad-producto" />
+            </div>
+            <div class="div-agregar">
+              <p class="texto-alerta" id="alerta-agregar"></p>
+              <button id="AgregarProductoMesa" class="btn-general">
+                Agregar
+              </button>
+            </div>
+          </div>
+          <br />
+          <br />
+          <h2 class="titulos-cuadros-prop">Productos Agregados</h2>
+          <div class="contenedor_tabla_scroll">
+            <table class="tabla_mesas" id="tabla-productos-id">
+              <tr>
+                <th class="title-tabla">Hora</th>
+                <th class="title-tabla">Descripción</th>
+                <th class="title-tabla">Cantidad</th>
+                <th class="title-tabla">Vlr. Unit</th>
+                <th class="title-tabla">Total</th>
+              </tr>
+            </table>
+          </div>
+          <div class="elementos-extrem-fila">
+            <div class="elementos-flex">
+              <h3>Total:&nbsp;&nbsp;&nbsp;</h3>
+              <h3 id="CampoTotalMesa">0</h3>
+            </div>
+            <div class="elementos-flex">
+              <p class="texto-alerta" id="alerta-borrar-prod"></p>
+              <button id="EliminarProductoMesa" class="btn">Eliminar</button>
+            </div>
+          </div>
+          <br />
+          <div class="elementos-flex">
+            <h3>Paga con:</h3>
+            <input type="number" name="PagaCon" id="valor-pago" />
+          </div>
+          <div class="elementos-flex">
+            <h3 class="texto-alerta" id="alertaCambio"></h3>
+          </div>
+          <button id="BtnPagoMesa" class="btn-general">Pagar</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- //footer -->
+
+    <!-- copyright -->
+    <div class="cpy-right text-center py-3">
+      <p>
+        © 2023 Bar App. All rights reserved | Design by
+        <a href="#"> Pedro Castiblanco</a>
+      </p>
+    </div>
+    <!-- //copyright -->
+    <!-- move top icon -->
+    <a href="#home" class="move-top text-center">
+      <span class="fa fa-level-up" aria-hidden="true"></span>
+    </a>
+    <!-- //move top icon -->
+  </body>
+</html>

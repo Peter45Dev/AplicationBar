@@ -1,0 +1,1500 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inventario</title>
+
+    <!-- Custom-Files -->
+    <link rel="stylesheet" href="css/bootstrap.css" />
+    <!-- Bootstrap-Core-CSS -->
+    <link
+      href="css/css_slider.css"
+      type="text/css"
+      rel="stylesheet"
+      media="all"
+    />
+    <!-- css slider -->
+    <link rel="stylesheet" href="css/style.css" type="text/css" media="all" />
+    <!-- Style-CSS -->
+    <link href="css/font-awesome.min.css" rel="stylesheet" />
+    <!-- Font-Awesome-Icons-CSS -->
+    <!-- //Custom-Files -->
+
+    <!-- Web-Fonts -->
+    <link
+      href="//fonts.googleapis.com/css?family=Lato:100,100i,300,300i,400,400i,700,700i,900,900i&amp;subset=latin-ext"
+      rel="stylesheet"
+    />
+    <link
+      href="//fonts.googleapis.com/css?family=Barlow+Semi+Condensed:100,100i,200,200i,300,300i,400,400i,500,500i,600,600i,700,700i,800,800i,900,900i"
+      rel="stylesheet"
+    />
+    <!-- //Web-Fonts -->
+
+    <script type="module">
+      import { UUID } from "https://unpkg.com/uuidjs@^5";
+      // Import the functions you need from the SDKs you need
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+      /*import {
+        getAuth,
+        createUserWithEmailAndPassword,
+      } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";*/
+      import {
+        getStorage,
+        ref,
+        uploadBytes,
+        getDownloadURL,
+        deleteObject,
+        list,
+      } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
+      //import {getAuth,onAuthStateChanged,signInWithEmailAndPassword} from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+      import {
+        getDatabase,
+        ref as _ref,
+        set,
+        onValue,
+        get,
+        push,
+        remove,
+      } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyBF6FUMNt82O525pGOVyKm1ZiOhmLzLPmQ",
+        authDomain: "barinicial.firebaseapp.com",
+        databaseURL: "https://barinicial-default-rtdb.firebaseio.com",
+        projectId: "barinicial",
+        storageBucket: "barinicial.appspot.com",
+        messagingSenderId: "722647862157",
+        appId: "1:722647862157:web:f038ba770f0e773d294bc4",
+      };
+
+      const app = initializeApp(firebaseConfig);
+
+      //const auth = getAuth();
+      const db = getDatabase();
+      let ArrayNombresProd = [];
+      let ArrayLocales = [];
+      let ArrayLocalesHist = [];
+      let uuid;
+      let idLocalActual;
+      let ArrayNomUser = [];
+      let arrayKeyDB = [];
+      let sesionesTabla = [];
+      let sesionesCerradas = []; ///sesiones cerradas que se muestran para hacer el inventario a un local
+      let JsonUser;
+      let ObjetoCambioHist = [];
+      let IdenCambioHist;
+      //variables
+
+      window.onload = init;
+
+      function init() {
+        //controlar botones para el rol del usuario y enviar a login sino se ha creado el usuario en el local
+        try {
+          let Userobj = localStorage.getItem("UserData"); //UserData
+          JsonUser = JSON.parse(Userobj);
+
+          let UserRol = JsonUser.userrole;
+          console.log(UserRol);
+          if (UserRol == "Normal") {
+            location.href = "index.html";
+          }
+        } catch (error) {
+          location.href = "index.html";
+          console.log(error);
+        }
+
+        //btn cerrar sesion elimina el local y envía al index
+        const CerrarSesion = document.getElementById("CerrarSesionBtn");
+        CerrarSesion.addEventListener("click", function () {
+          localStorage.setItem("UserData", "");
+          location.href = "index.html";
+        });
+
+        //traer todos los productos
+        llenarArregloProd();
+        llenarArregloUserName();
+        mostrarValores();
+        llenarArregloLocales(); //funcioan para preguntar por los locales existentes en inventario y obtener los nombres
+        llenarArregloLocalesHist();
+        // variables para Popup crear mesa
+        const mostrarPopUpBtn = document.getElementById("mostrarPopUp");
+        const popUp = document.getElementById("popUp");
+        const cerrarPopUpBtn = document.getElementById("cerrarPopUp");
+        const cerrarPopUpCambios =
+          document.getElementById("cerrarPopUpCambios");
+        const cerrarPopUpSesionesInv = document.getElementById(
+          "cerrarPopUpSesionesInv"
+        );
+
+        //mostarr popup de mesas
+        mostrarPopUpBtn.addEventListener("click", function () {
+          popUp.style.display = "block";
+          const camptexto = document.getElementById("campoTexto");
+          camptexto.focus();
+
+          const miTabla = document.getElementById("tabla-prods-id");
+          llenarTablaProdsLocal(miTabla);
+        });
+
+        //boton de cerrar crear local
+        cerrarPopUpBtn.addEventListener("click", function () {
+          const miP = document.getElementById("alerta-local");
+          const campoTexto = document.getElementById("campoTexto");
+          miP.textContent = "";
+          campoTexto.value = "";
+          popUp.style.display = "none";
+        });
+
+        //boton de cerrar popUp cambios
+        cerrarPopUpCambios.addEventListener("click", function () {
+          const popUpCambio = document.getElementById("popUpCambios");
+
+          popUpCambio.style.display = "none";
+        });
+
+        //boton de cerrar crear local
+        cerrarPopUpSesionesInv.addEventListener("click", function () {
+          const popSesInv = document.getElementById("popUpSesionesInv");
+          const miP = document.getElementById("alerta-sesionesInv");
+          const PopInvent = document.getElementById("popUpInvPed");
+          miP.textContent = "";
+          popSesInv.style.display = "none";
+          PopInvent.style.display = "block";
+        });
+
+        //boton parar crear el local con el inventario inicial
+        const crearLocalInve = document.getElementById("crearNuevoLocal");
+        crearLocalInve.addEventListener("click", function () {
+          CrearLocalInventario();
+        });
+
+        //boton parar aplicar el inventario a un local ya definido y con las sesiones estableciadas
+        const btnAplicarInv = document.getElementById("HacerInvUser");
+        btnAplicarInv.addEventListener("click", function () {
+          hacerInvUserSesiones();
+        });
+
+        ///boton para hacer un pedido o un inventario a un local HacerInvPed
+        const crearInvPed = document.getElementById("HacerInvPed");
+        crearInvPed.addEventListener("click", function () {
+          ValidacionInvPed();
+        });
+
+        //evento para que al seleccionar pedido o inventario cambie el contenido del popupLocal
+        let opcionInvPed = document.getElementById("PedInvOpcion");
+        opcionInvPed.addEventListener("change", function () {
+          verificarOpcion(PedInvOpcion);
+        });
+
+        //cerrar Popup de InvPed
+        const cerrarLocalInvPed = document.getElementById("cerrarPopUpInvPed");
+        cerrarLocalInvPed.addEventListener("click", function () {
+          const popUpLocal = document.getElementById("popUpInvPed");
+          //const miP = document.getElementById("alerta-local");
+          //const campoTexto = document.getElementById("campoTexto");
+          //miP.textContent = "";
+          //campoTexto.value = "";
+          popUpLocal.style.display = "none";
+        });
+
+        //evento que genera el scroll en el popup
+        window.addEventListener("scroll", moverPopupConScroll);
+      }
+
+      function hacerInvUserSesiones() {
+        const textAlerta = document.getElementById("alerta-sesionesInv");
+        if (sesionesCerradas.length > 0) {
+          let arrayInvActual = ArrayLocales[idLocalActual].inventarioActual;
+          let arrayInvDescontar = sumarCantidadProductos(sesionesCerradas);
+
+          /* console.log(
+            "arreglo invactu",
+            arrayInvActual,
+            "arreglo suma sesiones",
+            arrayInvDescontar
+          );*/
+
+          HacerInventario(arrayInvDescontar, arrayInvActual);
+
+          const popSesionesUser = document.getElementById("popUpSesionesInv");
+          popSesionesUser.style.display = "none";
+
+          const popPedInv = document.getElementById("popUpInvPed");
+          popPedInv.style.display = "none";
+
+          textAlerta.textContent = "";
+        } else {
+          console.log("sesiones cerradas vacías");
+
+          textAlerta.textContent = "No hay sesiones cerradas para el usuario!";
+        }
+      }
+
+      function sumarCantidadProductos(arr) {
+        const sumaProductos = {};
+
+        // Recorremos el arreglo de objetos
+        arr.forEach((sesion) => {
+          sesion.forEach((elemento) => {
+            // Verificamos si el elemento tiene la propiedad "mesas"
+            if (elemento.mesas) {
+              // Recorremos los productos de cada mesa
+              elemento.mesas.productos.forEach((producto) => {
+                const nombreProducto = producto.nombre;
+                const cantidad = parseInt(producto.cantidad);
+
+                // Verificamos si ya existe la suma para este producto
+                if (sumaProductos[nombreProducto]) {
+                  // Si existe, sumamos la cantidad
+                  sumaProductos[nombreProducto] += cantidad;
+                } else {
+                  // Si no existe, creamos la entrada con la cantidad
+                  sumaProductos[nombreProducto] = cantidad;
+                }
+              });
+            }
+          });
+        });
+
+        // Convertimos el objeto en un arreglo de objetos
+        const resultado = Object.keys(sumaProductos).map((nombreProducto) => ({
+          nombre: nombreProducto,
+          cantidad: sumaProductos[nombreProducto],
+        }));
+
+        return resultado;
+      }
+
+      function mostrarValores() {
+        console.log("entro a mostrar datos de la DB");
+        onValue(_ref(db, "/inventario"), (snapshot) => {
+          arrayKeyDB = [];
+          snapshot.forEach((childSnapshot) => {
+            const key = childSnapshot.key; // Obtén la key del nodo
+            const value = childSnapshot.val(); // Obtén el valor del nodo
+            arrayKeyDB.push(key);
+            //console.log("Key:", key);
+            //console.log("Value:", value);
+          });
+        });
+      }
+
+      function ValidacionInvPed() {
+        let opcionInvPed = document.getElementById("PedInvOpcion");
+        let valorSeleccionado = opcionInvPed.value;
+        const alertapop = document.getElementById("alerta-localInvPed");
+
+        if (valorSeleccionado == "Pedido") {
+          // Pregunta al usuario y guarda la respuesta en una variable
+          const tablaped = document.getElementById("tabla-Ped-InvPed");
+          let error = verificarCamposValorTabla(tablaped, 2);
+
+          if (!error) {
+            const respuesta = window.confirm("¿Desea continuar?");
+
+            // Verifica la respuesta del usuario
+            if (respuesta) {
+              // El usuario seleccionó "Aceptar"
+              Hacerpedido();
+              alertapop.textContent = "";
+            } else {
+              // El usuario seleccionó "Cancelar" o cerró el cuadro de diálogo
+
+              console.log(
+                "El usuario seleccionó Cancelar o cerró el cuadro de diálogo."
+              );
+            }
+          } else {
+            alertapop.textContent = "hay campos vacíos en la tabla inventario!";
+          }
+        } else {
+          //console.log("crear opcion par hacer inventario");
+
+          const fechaIni = document.getElementById("fechaIni");
+          const fechaFin = document.getElementById("fechaFin");
+          const nombreUser = document.getElementById("inv_user");
+
+          const fechai = new Date(fechaIni.value);
+          const fechaf = new Date(fechaFin.value);
+
+          if (fechaIni.value == "" || fechaFin.value == "" || fechai > fechaf) {
+            console.log("cumple el if");
+            alertapop.textContent =
+              "Revisa las fechas, están vacías o inicio es mayor a fin!";
+          } else {
+            console.log("cumple el else");
+
+            const popSesionesUser = document.getElementById("popUpSesionesInv");
+            popSesionesUser.style.display = "block";
+
+            const popPedInv = document.getElementById("popUpInvPed");
+            popPedInv.style.display = "none";
+
+            llenarPopUpSesionesUser(
+              nombreUser.value,
+              fechaIni.value,
+              fechaFin.value
+            );
+
+            alertapop.textContent = "";
+          }
+        }
+      }
+
+      function llenarPopUpSesionesUser(nombre, fechain, fechafi) {
+        const popPedInv = document.getElementById("nombreUserInvSesiones");
+        popPedInv.textContent = `Inventario con usuario ${nombre}`;
+
+        buscarSesionesDB(nombre, fechain, fechafi);
+      }
+
+      async function buscarSesionesDB(nombre, fechaini, fechafin) {
+        const fechaInicial = new Date(fechaini);
+        const fechaFinal = new Date(fechafin);
+        fechaInicial.setDate(fechaInicial.getDate() + 1);
+        fechaFinal.setDate(fechaFinal.getDate() + 1);
+
+        let fechas = ArrayDiasEntreFechas(fechaInicial, fechaFinal);
+        let sesiones = [];
+        let fechasesion = [];
+
+        // Crear una promesa que se resolverá cuando todas las consultas se completen
+        const promesas = fechas.map((fecha) => {
+          return new Promise((resolve) => {
+            onValue(_ref(db, `/sesion/${fecha}/${nombre}`), (snapshot) => {
+              if (snapshot.val() != null) {
+                sesiones.push(procesarDatosSes(snapshot.val()));
+                fechasesion.push(fecha);
+              }
+              resolve(); // Resolver la promesa una vez que se haya completado la consulta
+            });
+          });
+        });
+
+        // Esperar a que todas las promesas se resuelvan
+        await Promise.all(promesas);
+
+        sesionesTabla = sesiones;
+
+        pintartablasesiones(sesionesTabla, fechasesion);
+      }
+
+      function pintartablasesiones(sesiones, fechasesion) {
+        let sesionesActivas = [];
+        sesionesCerradas = [];
+        let fechaSesCerr = [];
+
+        const textAlerta = document.getElementById("alerta-sesionesInv");
+        console.log("sesiones", sesiones);
+
+        if (sesiones.length >= 1) {
+          for (const key in sesiones) {
+            console.log("sesiones key", sesiones[key]);
+            let bolCerrada = false;
+            for (var i in sesiones[key]) {
+              console.log("fin en seiones:", sesiones[key][i]);
+              if (sesiones[key][i].fechafin) {
+                bolCerrada = true;
+              }
+            }
+            if (bolCerrada) {
+              sesionesCerradas.push(sesiones[key]);
+              fechaSesCerr.push(fechasesion[key]);
+            } else {
+              sesionesActivas.push(sesiones[key]);
+            }
+          }
+        } else {
+          textAlerta.textContent = "No hay sesiones para el usuario!";
+        }
+        if (sesionesActivas.length > 0) {
+          textAlerta.textContent = "Hay sesiones abiertas en el Rango!";
+        }
+
+        if (sesionesCerradas.length > 0) {
+          llenarTablaSesions(sesionesCerradas, fechaSesCerr);
+        }
+
+        console.log(
+          "sesiones abiertas",
+          sesionesActivas,
+          "sesiones cerradas",
+          sesionesCerradas
+        );
+      }
+
+      function llenarTablaSesions(sesiones, fechas) {
+        const miTabla = document.getElementById("tablaSesionesInv");
+        limpiarTabla(miTabla);
+
+        let ctrlItem = 0;
+        for (var i in sesiones) {
+          let objetoPuntual = sesiones;
+          const nuevaFila = miTabla.insertRow();
+          nuevaFila.classList.add("fila-tabla");
+          //nuevaFila.setAttribute("i", ctrlItem);
+
+          //creación de celda item
+          const nuevaCeldai = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+          nuevaCeldai.textContent = fechas[i];
+          nuevaCeldai.classList.add("celda-tabla");
+
+          let nuevaCelda = nuevaFila.insertCell();
+          nuevaCelda.textContent = sesiones[i][1].fechainicio;
+          nuevaCelda.classList.add("celda-tabla");
+
+          let totalSesion = calcularTotalVendido(sesiones[i]);
+
+          let nuevaCelda2 = nuevaFila.insertCell();
+          nuevaCelda2.textContent = totalSesion;
+          nuevaCelda2.classList.add("celda-tabla");
+        }
+      }
+
+      function calcularTotalVendido(objeto) {
+        let sumaVentasTotal = 0;
+        const totalVentas = document.getElementById("totalVentas");
+
+        for (const key in objeto) {
+          if (objeto[key].mesas && objeto[key].mesas.total) {
+            console.log("valor total mesa", objeto[key].mesas.total);
+            sumaVentasTotal += objeto[key].mesas.total;
+          }
+        }
+        return sumaVentasTotal;
+      }
+
+      function ArrayDiasEntreFechas(startDate, endDate) {
+        const dateArray = [];
+        const currentDate = new Date(startDate);
+
+        while (currentDate <= endDate) {
+          const dd = String(currentDate.getDate());
+          const mm = String(currentDate.getMonth() + 1);
+          const yyyy = currentDate.getFullYear();
+          dateArray.push(
+            `${dd}-${mm.charAt(0) === "0" ? mm.charAt(1) : mm}-${yyyy}`
+          );
+
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        return dateArray;
+      }
+
+      function Hacerpedido() {
+        const tablaped = document.getElementById("tabla-Ped-InvPed");
+        let arrayProdsPed = CrearArrayProds(tablaped);
+
+        let arrayInvActual = ArrayLocales[idLocalActual].inventarioActual;
+
+        // Paso 1: Crear un mapa para el primer arreglo
+        const mapaSumas = [];
+
+        for (var j in arrayProdsPed) {
+          let nuevoProd = true; ////variable para saber si el producto nuevo del pedido no lo tiene en el inv el local
+          for (var i in arrayInvActual) {
+            if (arrayInvActual[i].nombre == arrayProdsPed[j].nombre) {
+              let canti =
+                parseInt(arrayInvActual[i].cantidad) +
+                parseInt(arrayProdsPed[j].cantidad);
+              let objProdInd = {
+                nombre: arrayInvActual[i].nombre,
+                cantidad: canti,
+              };
+              mapaSumas.push(objProdInd);
+              nuevoProd = false;
+            }
+          }
+          if (nuevoProd) {
+            let objNuevoProd = {
+              nombre: arrayProdsPed[j].nombre,
+              cantidad: arrayProdsPed[j].cantidad,
+            };
+            mapaSumas.push(objNuevoProd);
+          }
+        }
+
+        console.log(mapaSumas);
+        ActualizarInv(
+          ArrayLocales[idLocalActual].nombre,
+          arrayInvActual,
+          mapaSumas,
+          "Pedido"
+        );
+      }
+
+      function HacerInventario(arrayProdsPed, arrayInvActual) {
+        // Paso 1: Crear un mapa para el primer arreglo
+        const mapaSumas = [];
+
+        for (var i in arrayInvActual) {
+          let nuevoProd = true; ////variable para saber si el producto nuevo del pedido no lo tiene en el inv el local
+          for (var j in arrayProdsPed) {
+            if (arrayInvActual[i].nombre == arrayProdsPed[j].nombre) {
+              let canti =
+                parseInt(arrayInvActual[i].cantidad) -
+                parseInt(arrayProdsPed[j].cantidad);
+              let objProdInd = {
+                nombre: arrayInvActual[i].nombre,
+                cantidad: canti,
+              };
+              mapaSumas.push(objProdInd);
+              nuevoProd = false;
+            }
+          }
+          if (nuevoProd) {
+            let objNuevoProd = {
+              nombre: arrayInvActual[i].nombre,
+              cantidad: arrayInvActual[i].cantidad,
+            };
+            mapaSumas.push(objNuevoProd);
+          }
+        }
+
+        console.log(mapaSumas);
+        ActualizarInv(
+          ArrayLocales[idLocalActual].nombre,
+          arrayInvActual,
+          mapaSumas,
+          "Inventario"
+        );
+      }
+
+      function verificarOpcion(miSelect) {
+        console.log("opcion", miSelect.value);
+
+        let valorSeleccionado = miSelect.value;
+        const fechaI = document.getElementById("blockfechaIni");
+        const fechaf = document.getElementById("blockfechaFin");
+        const grupoU = document.getElementById("grupoUsuario");
+        const btnInvPed = document.getElementById("HacerInvPed");
+        const tablaped = document.getElementById("containerTablaPed");
+
+        if (valorSeleccionado == "Pedido") {
+          fechaI.style.display = "none";
+          fechaf.style.display = "none";
+          grupoU.style.display = "none";
+          tablaped.style.display = "block";
+
+          btnInvPed.textContent = "Hacer Pedido";
+        } else {
+          fechaI.style.display = "block";
+          fechaf.style.display = "block";
+          grupoU.style.display = "block";
+          tablaped.style.display = "none";
+
+          btnInvPed.textContent = "Hacer Inventario";
+        }
+      }
+
+      function llenarTablaLocales() {
+        const miTabla = document.getElementById("tabla-locales-id");
+        limpiarTabla(miTabla);
+
+        let ctrlItem = 0;
+        for (var i in ArrayLocales) {
+          let objetoPuntual = ArrayLocales[i];
+          const nuevaFila = miTabla.insertRow();
+          nuevaFila.classList.add("fila-tabla");
+          nuevaFila.setAttribute("item", ctrlItem);
+
+          //agrega evento qeu nos va a mostrar los productos de cada mesa
+
+          nuevaFila.addEventListener("click", (event) => {
+            const dataId = nuevaFila.getAttribute("item");
+            idLocalActual = dataId;
+            mostrarLocalInvPed(dataId); //función para mostrar Pop Up de hacer pedido o inventario
+            const miTabla = document.getElementById("tabla-Ped-InvPed");
+            llenarTablaProdsLocal(miTabla);
+          });
+
+          //creación de celda item
+          const nuevaCeldai = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+          nuevaCeldai.textContent = ++ctrlItem;
+          nuevaCeldai.classList.add("celda-tabla");
+          let atriborganizados = []; /// arreglo para organizar atributos y mostrarlos en orden en la tabla
+
+          for (let atributo in ArrayLocales[i]) {
+            //console.log("atributo", objetoPuntual[atributo], arregloMesas[i]);
+            // Agregar una nueva celda en la fila
+            if (atributo == "nombre") {
+              atriborganizados[0] = objetoPuntual[atributo];
+            } else if (atributo == "fechaUltActualizacion") {
+              atriborganizados[1] = objetoPuntual[atributo];
+            }
+          }
+          //pintar celdas organizadas
+
+          atriborganizados.forEach((element) => {
+            let nuevaCelda = nuevaFila.insertCell();
+            nuevaCelda.textContent = element;
+            nuevaCelda.classList.add("celda-tabla");
+          });
+        }
+      }
+
+      function llenarTablaCambios(cambios) {
+        ObjetoCambioHist = [];
+        console.log("cambios que se envían a tabla", cambios);
+        const miTabla = document.getElementById("tablaLocalesHist");
+        limpiarTabla(miTabla);
+
+        let ctrlItem = 0;
+        for (var i in cambios) {
+          let objetoPuntual = cambios[i];
+          const nuevaFila = miTabla.insertRow();
+          nuevaFila.classList.add("fila-tabla");
+          nuevaFila.setAttribute("item", ctrlItem);
+
+          //agrega evento qeu nos va a mostrar los productos de cada mesa
+          ObjetoCambioHist.push(cambios[i]);
+          nuevaFila.addEventListener("click", (event) => {
+            const dataId = nuevaFila.getAttribute("item");
+            IdenCambioHist = dataId;
+            mostrarCambiosLocal(); //función para mostrar Pop Up de hacer pedido o inventario
+          });
+
+          //creación de celda item
+          const nuevaCeldai = nuevaFila.insertCell(); // Agregar una nueva celda en la fila
+          nuevaCeldai.textContent = ++ctrlItem;
+          nuevaCeldai.classList.add("celda-tabla");
+          let atriborganizados = []; /// arreglo para organizar atributos y mostrarlos en orden en la tabla
+
+          for (let atributo in cambios[i]) {
+            //console.log("atributo", objetoPuntual[atributo], arregloMesas[i]);
+            // Agregar una nueva celda en la fila
+            if (atributo == "accion") {
+              atriborganizados[0] = objetoPuntual[atributo];
+            } else if (atributo == "fecha") {
+              atriborganizados[1] = objetoPuntual[atributo];
+            }
+          }
+          //pintar celdas organizadas
+
+          atriborganizados.forEach((element) => {
+            let nuevaCelda = nuevaFila.insertCell();
+            nuevaCelda.textContent = element;
+            nuevaCelda.classList.add("celda-tabla");
+          });
+        }
+      }
+
+      function mostrarCambiosLocal() {
+        const popUpLocal = document.getElementById("popUpCambios");
+
+        const TablaProdAntes = document.getElementById("tablaCambiosAntes");
+        const TablaProdDesp = document.getElementById("tablaCambiosDesp");
+        console.log("cambio seleccionado", ObjetoCambioHist[IdenCambioHist]);
+        llenarTablaProdGeneral(
+          ObjetoCambioHist[IdenCambioHist].inventarioAnt,
+          TablaProdAntes
+        );
+        llenarTablaProdGeneral(
+          ObjetoCambioHist[IdenCambioHist].inventarioFinal,
+          TablaProdDesp
+        );
+        popUpLocal.style.display = "block";
+      }
+
+      function mostrarLocalInvPed(id) {
+        console.log("arraylocales", ArrayLocales[id], "id", id);
+        const popUpLocal = document.getElementById("popUpInvPed");
+        const NombreLocal = document.getElementById("nombreLocal");
+        popUpLocal.style.display = "block";
+        NombreLocal.textContent = ArrayLocales[id].nombre;
+
+        ////setopcion en pedido sobre inventario
+        let opcionInvPed = document.getElementById("PedInvOpcion");
+        opcionInvPed.value = "Pedido";
+        const fechaI = document.getElementById("blockfechaIni");
+        const fechaf = document.getElementById("blockfechaFin");
+        const grupoU = document.getElementById("grupoUsuario");
+        const btnInvPed = document.getElementById("HacerInvPed");
+        const tablaped = document.getElementById("containerTablaPed");
+
+        fechaI.style.display = "none";
+        fechaf.style.display = "none";
+        grupoU.style.display = "none";
+        tablaped.style.display = "block";
+        btnInvPed.textContent = "Hacer Pedido";
+
+        //lenar tabla con productos actuales
+        llenarTablaProdInvPed(ArrayLocales[id]);
+      }
+
+      function limpiarTabla(tabla) {
+        const filas = tabla.getElementsByTagName("tr");
+
+        for (let i = filas.length - 1; i > 0; i--) {
+          const fila = filas[i];
+          fila.parentNode.removeChild(fila);
+        }
+      }
+
+      function llenarArregloLocales() {
+        onValue(_ref(db, "/inventario"), (snapshot) => {
+          // console.log(snapshot);
+          procesarDatosInv(snapshot.val());
+        });
+      }
+
+      function llenarArregloLocalesHist() {
+        onValue(_ref(db, "/historial"), (snapshot) => {
+          // console.log(snapshot);
+          procesarDatosHist(snapshot.val());
+        });
+      }
+
+      function CrearLocalInventario() {
+        const nombreLocal = document.getElementById("campoTexto");
+        const popUp = document.getElementById("popUp");
+        const miP = document.getElementById("alerta-local");
+        const textoIngresado = campoTexto.value.toLowerCase();
+        console.log("arraylocales", ArrayLocales);
+        const objetoEncontrado = ArrayLocales.find(
+          (objeto) => objeto.nombre.toLowerCase() === textoIngresado
+        );
+
+        if (objetoEncontrado || textoIngresado == "") {
+          miP.textContent = "El Nombre de mesa ya existe o está vacío.";
+        } else {
+          const tablaped = document.getElementById("tabla-prods-id");
+          let error = verificarCamposValorTabla(tablaped, 2);
+
+          if (!error) {
+            miP.textContent = "";
+            const tabla = document.getElementById("tabla-prods-id");
+            let objproductos = CrearArrayProds(tabla);
+            crearObjetoInventarioNew(nombreLocal.value, objproductos);
+            nombrelocal.value = "";
+          } else {
+            miP.textContent = "Hay campos vacios en los productos!";
+          }
+        }
+      }
+
+      function crearObjetoInventarioNew(nombreLocal, arrayprods) {
+        const fechaHoraActual = new Date();
+        const fechaActual = fechaHoraActual.toLocaleDateString();
+
+        let objInvent = {
+          nombre: nombreLocal,
+          inventarioActual: arrayprods,
+          fechaUltActualizacion: fechaActual,
+        };
+
+        let cambioInicial = {
+          inventarioAnt: arrayprods,
+          inventarioFinal: arrayprods,
+          fecha: fechaActual,
+          accion: "pedido",
+        };
+
+        let objHistorial = {
+          nombre: nombreLocal,
+          cambios: [],
+        };
+
+        //console.log("----objetoinv", objInvent);
+        //ArrayLocales.push(objInvent);
+        uuid = UUID.generate();
+        //console.log("uuid antes", uuid);
+        setEnDBInventario(objInvent, uuid);
+        setEnDBHistorial(objHistorial, cambioInicial, uuid);
+      }
+
+      function ActualizarInv(
+        nombreLocal,
+        arrayprodsIni,
+        arrayprodsFin,
+        accion
+      ) {
+        const fechaHoraActual = new Date();
+        const fechaActual = fechaHoraActual.toLocaleDateString();
+
+        let objInvent = {
+          nombre: nombreLocal,
+          inventarioActual: arrayprodsFin,
+          fechaUltActualizacion: fechaActual,
+        };
+
+        let cambioInicial = {
+          inventarioAnt: arrayprodsIni,
+          inventarioFinal: arrayprodsFin,
+          fecha: fechaActual,
+          accion: accion,
+        };
+
+        let cambiocurrent = [];
+        cambiocurrent.push(cambioInicial);
+
+        let objHistorial = {
+          nombre: nombreLocal,
+          cambios: cambiocurrent,
+        };
+
+        setEnDBInventario(objInvent, arrayKeyDB[idLocalActual]);
+        pushEnDBHistorial(cambioInicial, arrayKeyDB[idLocalActual]);
+      }
+
+      function setEnDBInventario(obj, uuid) {
+        //console.log("uuid despues", uuid);
+        const db = getDatabase();
+
+        set(_ref(db, `inventario/${uuid}`), obj).then(() => {
+          console.log("elemento agregado a inventario");
+        });
+        const popUp = document.getElementById("popUp");
+        popUp.style.display = "none";
+        //AgregaritemLocales(obj);
+      }
+
+      function setEnDBHistorial(obj, cambioi, uuid) {
+        const db = getDatabase();
+        let uuidNew = UUID.generate();
+        let newObjInv = {
+          nombre: obj.nombre,
+          cambios: [],
+        };
+
+        set(_ref(db, `historial/${uuid}`), newObjInv).then(() => {
+          console.log("elemento agregado a inventario");
+        });
+        push(_ref(db, `historial/${uuid}/cambios`), cambioi).then(() => {
+          console.log("elemento agregado a inventario solo cambios");
+        });
+
+        const popUp = document.getElementById("popUp");
+        popUp.style.display = "none";
+        //AgregaritemLocales(obj);
+      }
+
+      function pushEnDBHistorial(obj, uuid) {
+        const db = getDatabase();
+        let uuidNew = UUID.generate();
+
+        push(_ref(db, `historial/${uuid}/cambios`), obj).then(() => {
+          console.log("elemento agregado a inventario");
+        });
+
+        const popUp = document.getElementById("popUpInvPed");
+        popUp.style.display = "none";
+      }
+
+      function CrearArrayProds(tabla) {
+        let arrayProdsCurrent = [];
+
+        // Itera a través de las filas de la tabla
+        for (let i = 1; i < tabla.rows.length; i++) {
+          // Obtén la fila actual
+          const fila = tabla.rows[i];
+
+          // Obtén el valor de la segunda columna (Nombre del Item)
+          const nombreItem = fila.cells[1].textContent;
+
+          // Obtén el campo de texto de la tercera columna (Valor)
+          const inputValor = fila.cells[2].querySelector(
+            "input[type='number']"
+          );
+
+          const valor = inputValor.value;
+
+          let elementsProd = {};
+
+          elementsProd.nombre = nombreItem;
+          elementsProd.cantidad = valor;
+
+          arrayProdsCurrent.push(elementsProd);
+        }
+        return arrayProdsCurrent;
+      }
+
+      function verificarCamposValorTabla(tabla, col) {
+        let error = false;
+
+        for (let i = 1; i < tabla.rows.length; i++) {
+          // Obtén la fila actual
+          const fila = tabla.rows[i];
+
+          // Obtén el campo de texto de la tercera columna (Valor)
+          const inputValor = fila.cells[col].querySelector(
+            "input[type='number']"
+          );
+
+          const valor = inputValor.value;
+
+          if (valor == "") {
+            error = true;
+          }
+        }
+        return error;
+      }
+
+      function llenarTablaProdsLocal(miTabla) {
+        limpiarTabla(miTabla);
+
+        let ctrlItem = 0;
+        for (var i in ArrayNombresProd) {
+          // Crea una fila
+          let fila = document.createElement("tr");
+          fila.classList.add("fila-tabla");
+
+          // Crea la primera columna con el número de item
+          let columnaItem = document.createElement("td");
+          columnaItem.classList.add("celda-tabla");
+          columnaItem.textContent = i;
+
+          // Crea la segunda columna para el nombre del item (puedes ajustar los nombres según tus necesidades)
+          let columnaNombre = document.createElement("td");
+          columnaNombre.classList.add("celda-tabla");
+          columnaNombre.textContent = ArrayNombresProd[i];
+
+          // Crea la tercera columna con un campo de texto numérico
+          let columnaValor = document.createElement("td");
+          columnaValor.classList.add("celda-tabla", "col-tabla-valor");
+          let inputValor = document.createElement("input");
+          inputValor.classList.add("col-tabla-valor-input");
+          inputValor.type = "number";
+          inputValor.value = "0"; // Puedes establecer un valor predeterminado aquí si es necesario
+
+          // Agrega el campo de texto a la tercera columna
+          columnaValor.appendChild(inputValor);
+
+          // Agrega las columnas a la fila
+          fila.appendChild(columnaItem);
+          fila.appendChild(columnaNombre);
+          fila.appendChild(columnaValor);
+
+          // Agrega la fila al cuerpo de la tabla
+          miTabla.appendChild(fila);
+        }
+      }
+
+      function llenarTablaProdInvPed(local) {
+        const miTabla = document.getElementById("tabla-prods-InvPed");
+        limpiarTabla(miTabla);
+        const inv = local.inventarioActual;
+
+        for (var i in inv) {
+          // Crea una fila
+          let fila = document.createElement("tr");
+          fila.classList.add("fila-tabla");
+
+          // Crea la primera columna con el número de item
+          let columnaItem = document.createElement("td");
+          columnaItem.classList.add("celda-tabla");
+          columnaItem.textContent = i;
+
+          // Crea la segunda columna para el nombre del item (puedes ajustar los nombres según tus necesidades)
+          let columnaNombre = document.createElement("td");
+          columnaNombre.classList.add("celda-tabla");
+          columnaNombre.textContent = inv[i].nombre;
+
+          // Crea la tercera columna con un campo de texto numérico
+          let columnaValor = document.createElement("td");
+          columnaValor.classList.add("celda-tabla", "col-tabla-valor");
+          columnaValor.textContent = inv[i].cantidad;
+
+          // Agrega las columnas a la fila
+          fila.appendChild(columnaItem);
+          fila.appendChild(columnaNombre);
+          fila.appendChild(columnaValor);
+
+          // Agrega la fila al cuerpo de la tabla
+          miTabla.appendChild(fila);
+        }
+      }
+
+      function llenarTablaProdGeneral(local, miTabla) {
+        limpiarTabla(miTabla);
+        console.log("**arregloprods", local);
+        const inv = local;
+
+        for (var i in inv) {
+          // Crea una fila
+          let fila = document.createElement("tr");
+          fila.classList.add("fila-tabla");
+
+          // Crea la primera columna con el número de item
+          let columnaItem = document.createElement("td");
+          columnaItem.classList.add("celda-tabla");
+          columnaItem.textContent = i;
+
+          // Crea la segunda columna para el nombre del item (puedes ajustar los nombres según tus necesidades)
+          let columnaNombre = document.createElement("td");
+          columnaNombre.classList.add("celda-tabla");
+          columnaNombre.textContent = inv[i].nombre;
+
+          // Crea la tercera columna con un campo de texto numérico
+          let columnaValor = document.createElement("td");
+          columnaValor.classList.add("celda-tabla", "col-tabla-valor");
+          columnaValor.textContent = inv[i].cantidad;
+
+          // Agrega las columnas a la fila
+          fila.appendChild(columnaItem);
+          fila.appendChild(columnaNombre);
+          fila.appendChild(columnaValor);
+
+          // Agrega la fila al cuerpo de la tabla
+          miTabla.appendChild(fila);
+        }
+      }
+
+      function llenarArregloProd() {
+        onValue(_ref(db, "/productos"), (snapshot) => {
+          // console.log(snapshot);
+          procesarDatos(snapshot.val());
+        });
+      }
+
+      function llenarArregloUserName() {
+        onValue(_ref(db, "/usuarios"), (snapshot) => {
+          // console.log(snapshot);
+          procesarDatosUserNomb(snapshot.val());
+        });
+      }
+
+      function procesarDatos(data) {
+        const alertaNoProds = document.getElementById("alertaNoProds");
+        const btnCrearLocal = document.getElementById("mostrarPopUp");
+
+        ArrayNombresProd = [];
+
+        for (var i in data) {
+          ArrayNombresProd.push(data[i].nombre);
+        }
+        if (ArrayNombresProd.length == 0) {
+          alertaNoProds.textContent =
+            "No hay Productos en la base de datos de la App!!";
+          btnCrearLocal.style.display = "none";
+        } else {
+          alertaNoProds.textContent = "";
+          btnCrearLocal.style.display = "block";
+        }
+        console.log("consultaDB", ArrayNombresProd);
+      }
+
+      function procesarDatosUserNomb(data) {
+        ArrayNomUser = [];
+
+        for (var i in data) {
+          ArrayNomUser.push(data[i].name);
+        }
+        crearopcionesSelect();
+      }
+
+      function procesarDatosInv(data) {
+        ArrayLocales = [];
+        console.log("sesion", data);
+        for (var i in data) {
+          ArrayLocales.push(data[i]);
+        }
+        console.log("arreglo de locales", ArrayLocales);
+        console.log("arreglo de keys", arrayKeyDB);
+        llenarTablaLocales(); //se llena la tabla con los locales que hay en la DB
+      }
+
+      function procesarDatosHist(data) {
+        ArrayLocalesHist = [];
+
+        for (var i in data) {
+          ArrayLocalesHist.push(data[i]);
+        }
+        llenarListaLocal(); //se llena la tabla con los locales que hay en la DB
+      }
+
+      function llenarListaLocal() {
+        // Obtén una referencia al elemento select (lista desplegable) en tu HTML.
+        const selectElement = document.getElementById("LocalesHistmenu");
+
+        //elimina opciones anteriores
+        while (selectElement.options.length > 0) {
+          selectElement.remove(0); // Elimina la primera opción en cada iteración
+        }
+
+        // Crea una lista de opciones basada en los nombres en el arreglo de datos.
+        ArrayLocalesHist.forEach((element, index) => {
+          const nombre = element.nombre;
+          const option = document.createElement("option");
+          option.value = index; // Usamos el índice para identificar qué elemento se seleccionó.
+          option.text = nombre;
+          selectElement.appendChild(option);
+        });
+
+        // Agrega un evento de escucha al elemento select.
+        selectElement.addEventListener("change", function () {
+          const selectedIndex = selectElement.value; // Obtenemos el índice seleccionado.
+          const selectedData = ArrayLocalesHist[selectedIndex]; // Obtenemos el objeto de datos correspondiente.
+
+          // Verificamos si hay un objeto "cambios" en el elemento seleccionado.
+          if (selectedData.cambios) {
+            llenarTablaCambios(selectedData.cambios);
+          } else {
+            console.log(
+              "No hay elementos del atributo 'cambios' para este nombre."
+            );
+          }
+        });
+      }
+
+      function procesarDatosSes(data) {
+        let ArrayCamposSesion = [];
+        console.log("campos-sesion", data);
+        for (var i in data) {
+          ArrayCamposSesion.push(data[i]);
+        }
+        return ArrayCamposSesion;
+      }
+
+      function crearopcionesSelect() {
+        const miSelect = document.getElementById("inv_user");
+
+        // Crear opciones
+        for (var i in ArrayNomUser) {
+          const opcion1 = document.createElement("option");
+          opcion1.text = ArrayNomUser[i];
+          opcion1.value = ArrayNomUser[i];
+
+          miSelect.add(opcion1);
+        }
+      }
+
+      function moverPopupConScroll() {
+        const popup = document.getElementById("popupLocalInvPed");
+        const scrollTop = window.scrollY || document.documentElement.scrollTop;
+
+        // Calcula la nueva posición vertical del popup
+        const nuevaPosicionVertical = 50 + scrollTop; // 50 es la posición vertical inicial
+
+        // Aplica la nueva posición vertical al estilo del popup
+        popup.style.top = `${nuevaPosicionVertical}px`;
+
+        const popupcambios = document.getElementById("popUpCambiosModal");
+        const scrollTop2 = window.scrollY || document.documentElement.scrollTop;
+        // Calcula la nueva posición vertical del popup
+        const nuevaPosicionVertical2 = 50 + scrollTop2;
+        // Aplica la nueva posición vertical al estilo del popup
+        popupcambios.style.top = `${nuevaPosicionVertical2}px`;
+      }
+    </script>
+  </head>
+  <body>
+    <!-- //encabezado con navegación -->
+
+    <!-- header -->
+    <header id="home">
+      <!-- top-bar -->
+      <div class="top-bar py-2 border-bottom">
+        <div class="container">
+          <div class="row middle-flex">
+            <div
+              class="col-xl-7 col-md-5 top-social-agile mb-md-0 mb-1 text-lg-left text-center"
+            >
+              <div class="row">
+                <div class="col-xl-3 col-6 header-top_w3layouts">
+                  <p class="text-da">
+                    <span class="fa fa-map-marker mr-2"></span>Engativá, Bogotá
+                  </p>
+                </div>
+                <div class="col-xl-3 col-6 header-top_w3layouts">
+                  <p class="text-da">
+                    <span class="fa fa-phone mr-2"></span>3015134793
+                  </p>
+                </div>
+                <div class="col-xl-6"></div>
+              </div>
+            </div>
+            <div
+              class="col-xl-5 col-md-7 top-social-agile text-md-right text-center pr-sm-0 mt-md-0 mt-2"
+            >
+              <div class="row middle-flex">
+                <div class="col-lg-5 col-4 top-w3layouts p-md-0 text-right">
+                  <!-- login -->
+                  <a
+                    href="index.html"
+                    class="btn login-button-2 text-uppercase text-wh"
+                  >
+                    <span class="fa fa-sign-in mr-2"></span>Login</a
+                  >
+                  <!-- //login --><!-- login -->
+                </div>
+                <div class="col-lg-7 col-8 social-grid-w3">
+                  <button
+                    type="button"
+                    class="btn submit-contact ml-auto"
+                    id="CerrarSesionBtn"
+                  >
+                    Cerrar Sesión
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="main-top py-1">
+      <div class="container">
+        <div class="nav-content">
+          <!-- logo -->
+          <h1>
+            <a id="logo" class="logo" href="index.html">
+              <img src="images/logo.png" alt="" class="img-fluid" /><span
+                >BAR</span
+              >
+              App
+            </a>
+          </h1>
+          <!-- //logo -->
+          <!-- nav -->
+          <div class="nav_web-dealingsls">
+            <nav>
+              <label for="drop" class="toggle">Menu</label>
+              <input type="checkbox" id="drop" />
+              <ul class="menu">
+                <li>
+                  <a href="calculoOrden.html">Turno Mesas</a>
+                </li>
+                <li><a href="menu.html">Productos</a></li>
+                <li id="linkRegistro">
+                  <a href="register.html">Registrar Usuario</a>
+                </li>
+                <li id="linkCarga">
+                  <a href="loadform.html">Cargar Producto</a>
+                </li>
+                <li><a href="sesiones.html">Sesiones</a></li>
+              </ul>
+            </nav>
+          </div>
+          <!-- //nav -->
+        </div>
+      </div>
+    </div>
+
+    <!-- //formulario -->
+
+    <section>
+      <div class="container pb-xl-5 pb-lg-3">
+        <div class="title-section text-center mb-md-5 mb-4">
+          <div class="container py-xl-4">
+            <h3 class="w3ls-title"><span>Inventario</span></h3>
+
+            <div class="container py-xl-5 py-lg-3">
+              <button
+                type="button"
+                class="btn submit-contact ml-auto"
+                id="mostrarPopUp"
+              >
+                Agregar Local
+              </button>
+            </div>
+            <h2>Locales</h2>
+            <div class="container py-xl-5 py-lg-3 altura1000">
+              <table class="tabla_mesas" id="tabla-locales-id">
+                <tr>
+                  <th class="title-tabla">Item</th>
+                  <th class="title-tabla">Nombre</th>
+                  <th class="col-tabla-des title-tabla">
+                    Ultima actualización
+                  </th>
+                </tr>
+              </table>
+              <h1 id="alertaNoProds" class="texto-alerta"></h1>
+              <h3>Historial Cambios</h3>
+              <br />
+              <div
+                class="container py-xl-5 py-lg-3 elementos-extrem-fila width80"
+              >
+                <div class="form-group elementos-flex" id="grupoLocal">
+                  <label>Locales:&nbsp;</label>
+                  <select
+                    class="form-control"
+                    name="locales"
+                    id="LocalesHistmenu"
+                    placeholder=""
+                    required=""
+                  >
+                    <!--<option value="Admin">Admin</option>
+                        <option value="Normal">Normal</option>-->
+                  </select>
+                </div>
+              </div>
+              <table class="tabla_mesas" id="tablaLocalesHist">
+                <tr>
+                  <th class="title-tabla">Item</th>
+                  <th class="title-tabla">fecha</th>
+                  <th class="title-tabla">Acción</th>
+                </tr>
+              </table>
+              <h1 id="alertaLocalesHist" class="texto-alerta"></h1>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- //pop up para agregar el nombre de la mesa -->
+      <div id="popUp" class="modal">
+        <div class="modal-content">
+          <span class="cerrar" id="cerrarPopUp">&times;</span>
+          <h2>Ingresa nuevo Local</h2>
+          <div><p class="texto-alerta" id="alerta-local"></p></div>
+          <input type="text" id="campoTexto" placeholder="Nombre de mesa" />
+          <br /><br />
+          <div class="container py-xl-5 py-lg-3">
+            <h3>Productos</h3>
+            <div class="contenedor_tabla_scroll">
+              <table class="tabla_mesas" id="tabla-prods-id">
+                <tr>
+                  <th class="title-tabla">Item</th>
+                  <th class="col-tabla-des title-tabla">Nombre</th>
+                  <th class="col-tabla-valor title-tabla">Cantidad</th>
+                </tr>
+              </table>
+            </div>
+          </div>
+          <button id="crearNuevoLocal" class="btn-general">Crear</button>
+        </div>
+      </div>
+
+      <!-- //pop up para mostrar cambios de un historial -->
+      <div id="popUpCambios" class="modal">
+        <div class="modal-content-prod" id="popUpCambiosModal">
+          <span class="cerrar" id="cerrarPopUpCambios">&times;</span>
+          <h2>Cambios</h2>
+          <br />
+          <div class="container py-xl-5 py-lg-3">
+            <h3>Productos actual</h3>
+            <div class="contenedor_tabla_scroll">
+              <table class="tabla_mesas" id="tablaCambiosAntes">
+                <tr>
+                  <th class="title-tabla">Item</th>
+                  <th class="col-tabla-des title-tabla">Nombre</th>
+                  <th class="col-tabla-valor title-tabla">Cantidad</th>
+                </tr>
+              </table>
+            </div>
+          </div>
+          <br />
+          <div class="container py-xl-5 py-lg-3" id="containerTablaPedCambios">
+            <h3>Productos pedido</h3>
+            <div class="contenedor_tabla_scroll">
+              <table class="tabla_mesas" id="tablaCambiosDesp">
+                <tr>
+                  <th class="title-tabla">Item</th>
+                  <th class="col-tabla-des title-tabla">Nombre</th>
+                  <th class="col-tabla-valor title-tabla">Cantidad</th>
+                </tr>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- //pop up para mostrar las sesiones de un usuario en inventario -->
+      <div id="popUpSesionesInv" class="modal">
+        <div class="modal-content-medium">
+          <span class="cerrar" id="cerrarPopUpSesionesInv">&times;</span>
+          <h2 id="nombreUserInvSesiones"></h2>
+          <br />
+          <div><p class="texto-alerta" id="alerta-sesionesInv"></p></div>
+          <div class="container py-xl-5 py-lg-3">
+            <h3>Sesiones</h3>
+            <div class="contenedor_tabla_scroll">
+              <table class="tabla_mesas" id="tablaSesionesInv">
+                <tr>
+                  <th class="title-tabla">sesion</th>
+                  <th class="col-tabla-des title-tabla">Fecha Inicial</th>
+                  <th class="col-tabla-valor title-tabla">Total</th>
+                </tr>
+              </table>
+            </div>
+          </div>
+          <button id="HacerInvUser" class="btn-general">Aceptar</button>
+        </div>
+      </div>
+
+      <!-- //pop up para mostrar el local y hacer pedido o inventario -->
+      <div id="popUpInvPed" class="modal">
+        <div class="modal-content-prod" id="popupLocalInvPed">
+          <span class="cerrar" id="cerrarPopUpInvPed">&times;</span>
+          <h2 id="nombreLocal"></h2>
+          <br />
+          <div><p class="texto-alerta" id="alerta-localInvPed"></p></div>
+          <div class="form-group">
+            <label>Pedido o Inventario</label>
+            <select
+              class="form-control"
+              name="PedInv"
+              id="PedInvOpcion"
+              placeholder=""
+              required=""
+            >
+              <option value="Pedido">Pedido</option>
+              <option value="Inventario">Inventario</option>
+            </select>
+          </div>
+          <div class="form-group" id="grupoUsuario">
+            <label>Usuario</label>
+            <select
+              class="form-control"
+              name="user"
+              id="inv_user"
+              placeholder=""
+              required=""
+            >
+              <!--<option value="Admin">Admin</option>
+                  <option value="Normal">Normal</option>-->
+            </select>
+          </div>
+          <div id="blockfechaIni">
+            <label for="fecha">Fecha inicial:</label>
+            <input type="date" id="fechaIni" name="fecha" />
+          </div>
+          <div id="blockfechaFin">
+            <label for="fecha">Fecha final:</label>
+            <input type="date" id="fechaFin" name="fecha" />
+          </div>
+          <br />
+          <div class="container py-xl-5 py-lg-3">
+            <h3>Productos actual</h3>
+            <div class="contenedor_tabla_scroll">
+              <table class="tabla_mesas" id="tabla-prods-InvPed">
+                <tr>
+                  <th class="title-tabla">Item</th>
+                  <th class="col-tabla-des title-tabla">Nombre</th>
+                  <th class="col-tabla-valor title-tabla">Cantidad</th>
+                </tr>
+              </table>
+            </div>
+          </div>
+          <br />
+          <div class="container py-xl-5 py-lg-3" id="containerTablaPed">
+            <h3>Productos pedido</h3>
+            <div class="contenedor_tabla_scroll">
+              <table class="tabla_mesas" id="tabla-Ped-InvPed">
+                <tr>
+                  <th class="title-tabla">Item</th>
+                  <th class="col-tabla-des title-tabla">Nombre</th>
+                  <th class="col-tabla-valor title-tabla">Cantidad</th>
+                </tr>
+              </table>
+            </div>
+          </div>
+          <button id="HacerInvPed" class="btn-general">Hacer Inventario</button>
+        </div>
+      </div>
+    </section>
+    <!-- copyright -->
+    <div class="cpy-right text-center py-3">
+      <p>
+        © 2023 App Bar | Design by
+        <a> Pedro Castiblanco</a>
+      </p>
+    </div>
+    <!-- //copyright -->
+  </body>
+</html>

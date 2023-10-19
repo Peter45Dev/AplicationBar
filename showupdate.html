@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Load Products</title>
+
+    <!-- Custom-Files -->
+    <link rel="stylesheet" href="css/bootstrap.css" />
+    <!-- Bootstrap-Core-CSS -->
+    <link
+      href="css/css_slider.css"
+      type="text/css"
+      rel="stylesheet"
+      media="all"
+    />
+    <!-- css slider -->
+    <link rel="stylesheet" href="css/style.css" type="text/css" media="all" />
+    <!-- Style-CSS -->
+    <link href="css/font-awesome.min.css" rel="stylesheet" />
+    <!-- Font-Awesome-Icons-CSS -->
+    <!-- //Custom-Files -->
+
+    <!-- Web-Fonts -->
+    <link
+      href="//fonts.googleapis.com/css?family=Lato:100,100i,300,300i,400,400i,700,700i,900,900i&amp;subset=latin-ext"
+      rel="stylesheet"
+    />
+    <link
+      href="//fonts.googleapis.com/css?family=Barlow+Semi+Condensed:100,100i,200,200i,300,300i,400,400i,500,500i,600,600i,700,700i,800,800i,900,900i"
+      rel="stylesheet"
+    />
+    <!-- //Web-Fonts -->
+
+
+    <script type="module">
+      import { UUID } from "https://unpkg.com/uuidjs@^5";
+      // Import the functions you need from the SDKs you need
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+      import {
+        getStorage,
+        ref,
+        uploadBytes,
+        getDownloadURL, deleteObject, list,
+      } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
+      //import {getAuth,onAuthStateChanged,signInWithEmailAndPassword} from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+      import {
+        getDatabase,
+        ref as _ref,
+        set, update, remove,
+      } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyBF6FUMNt82O525pGOVyKm1ZiOhmLzLPmQ",
+        authDomain: "barinicial.firebaseapp.com",
+        databaseURL: "https://barinicial-default-rtdb.firebaseio.com",
+        projectId: "barinicial",
+        storageBucket: "barinicial.appspot.com",
+        messagingSenderId: "722647862157",
+        appId: "1:722647862157:web:f038ba770f0e773d294bc4",
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const storage = getStorage();
+      let uuid;
+      let keyUpdate;
+      let urlStorage;
+      let StorageElementDelete;
+      let btn_file;
+      let JsonUser;
+      
+
+      window.onload = () => {
+        
+
+        //controlar botones para el rol del usuario y enviar a login sino se ha creado el usuario en el local
+        try {
+          let Userobj = localStorage.getItem("UserData"); //UserData
+          JsonUser = JSON.parse(Userobj);
+          let UserRol = JsonUser.userrole;
+          console.log(UserRol);
+          if (UserRol == "Normal") {
+            location.href = "index.html";
+          }
+        } catch (error) {
+          location.href = "index.html";
+          console.log(error);
+        }
+
+        //btn cerrar sesion elimina el local y envía al index
+        const CerrarSesion = document.getElementById("CerrarSesionBtn");
+        CerrarSesion.addEventListener("click", function () {
+          localStorage.setItem("UserData", "");
+          location.href = "index.html";
+        });
+
+        actualizarFront();
+        const btn_enviar = document.getElementById("btn_enviar");
+        const btn_borrar = document.getElementById("btn_borrar");
+        btn_file = document.getElementById("archivo_imagen");
+        btn_enviar.addEventListener("click", enviarDatos);
+        btn_borrar.addEventListener("click", ObtenerElemntosStorage);
+
+      };
+
+      function actualizarFront(){
+
+        let obj = localStorage.getItem("CurrentProduct");
+
+            if(obj)
+            {
+                //console.table(obj);
+                pintarDatos(JSON.parse(obj));
+            }
+            else
+            {
+                location.href = "/";
+            }
+
+      }
+
+      function pintarDatos(obj){
+
+        let nombreProd = document.getElementById("nombre");
+        let descriProd = document.getElementById("descripcion");
+        let precioProd = document.getElementById("precio");
+        
+        keyUpdate =obj.key;
+        nombreProd.value =obj.nombre;
+        descriProd.value =obj.descripcion;
+        precioProd.value =obj.precio;
+        urlStorage = obj.url;
+
+      }
+
+      function frmToObj(myFormData) {
+        const formDataObj = {};
+        myFormData.forEach((value, key) => (formDataObj[key] = value));
+        return formDataObj;
+      }
+
+      function crearProducto(formData) {
+        const db = getDatabase();
+        const obj = frmToObj(formData);
+        /*
+            {
+                nombre: obj.nombre,
+                descripcion: obj.descripcion,
+                cantidad : obj.cantidad,
+                precio:obj.precio,
+                url:obj.url
+            }
+            */
+          // console.log("formobj", obj);
+          // console.log("key a actualizar", keyUpdate);
+
+       update(_ref(db, `productos/${obj.key}`), obj).then(() => {
+        alert("Producto actualizado");
+        });
+      }
+
+      function borrarObjeto(path,RemoveObject){
+        const db = getDatabase();
+        console.log("entró a borrar objeto");
+
+        const storage = getStorage();
+
+            // Especifica la ruta del elemento que deseas eliminar
+            const rutaElementoAEliminar = path; // Reemplaza con la ruta de tu elemento
+
+            // Obtén la referencia al elemento que deseas eliminar
+            const elementoAEliminarRef = ref(storage, rutaElementoAEliminar);
+
+            // Elimina el elemento del almacenamiento
+            deleteObject(elementoAEliminarRef)
+            .then(() => {
+                console.log("Elemento eliminado exitosamente.");
+                
+            })
+            .catch((error) => {
+                console.error("Error al eliminar el elemento:", error);
+            });
+
+        if (RemoveObject==true){
+        remove(_ref(db, `productos/${keyUpdate}`)).then(() => {
+        alert("Producto borrado");
+        });
+    }
+  }
+
+    function borrarSoloProd(){
+
+      const db = getDatabase();
+      remove(_ref(db, `productos/${keyUpdate}`)).then(() => {
+        alert("Producto borrado");
+        });
+        
+      }
+
+      function ObtenerElemntosStorage(){
+        event.preventDefault();
+
+        borrarSoloProd();//funcion para solo borrar el producto sin el storage
+        /*const db = getDatabase();
+
+                    const storage = getStorage();
+
+            // Especifica la ruta de la carpeta "images" en el almacenamiento
+            const carpetaImagesRef = ref(storage, "images");
+
+            // Obtiene la lista de elementos dentro de la carpeta "images"
+            list(carpetaImagesRef)
+            .then((result) => {
+                // result.items contiene una lista de referencias a los elementos dentro de la carpeta
+                result.items.forEach((itemRef) => {
+                // Obtiene la ruta completa del elemento dentro de la carpeta "images"
+                const rutaElemento = itemRef.fullPath;
+
+                // Obtiene la URL de descarga del elemento
+                getDownloadURL(itemRef)
+                    .then((url) => {
+                    console.log("Ruta del elemento:", rutaElemento);
+                    console.log("URL del elemento:", url);
+                    if(url == urlStorage){
+                        StorageElementDelete = rutaElemento;
+                        console.log("path Storage", StorageElementDelete);
+                        borrarObjeto(rutaElemento,true);
+                    }
+                     
+                     
+                    })
+                    .catch((error) => {
+                    console.error("Error al obtener la URL del elemento:", error);
+                    });
+                    
+                });
+                
+            })
+            .catch((error) => {
+                console.error("Error al obtener la lista de elementos:", error);
+            });
+            
+           */
+
+      }
+
+      function ObtenerElemntosSoloStorage(){
+        event.preventDefault();
+        const db = getDatabase();
+
+                    const storage = getStorage();
+
+            // Especifica la ruta de la carpeta "images" en el almacenamiento
+            const carpetaImagesRef = ref(storage, "images");
+
+            // Obtiene la lista de elementos dentro de la carpeta "images"
+            list(carpetaImagesRef)
+            .then((result) => {
+                // result.items contiene una lista de referencias a los elementos dentro de la carpeta
+                result.items.forEach((itemRef) => {
+                // Obtiene la ruta completa del elemento dentro de la carpeta "images"
+                const rutaElemento = itemRef.fullPath;
+
+                // Obtiene la URL de descarga del elemento
+                getDownloadURL(itemRef)
+                    .then((url) => {
+                    console.log("Ruta del elemento:", rutaElemento);
+                    console.log("URL del elemento:", url);
+                    if(url == urlStorage){
+                        StorageElementDelete = rutaElemento;
+                        console.log("path Storage", StorageElementDelete);
+                        borrarObjeto(rutaElemento,false);
+                    }
+                     
+                     
+                    })
+                    .catch((error) => {
+                    console.error("Error al obtener la URL del elemento:", error);
+                    });
+                    
+                });
+                
+            })
+            .catch((error) => {
+                console.error("Error al obtener la lista de elementos:", error);
+            });
+            
+           
+
+      }
+
+      function enviarDatos(event) {
+        event.preventDefault();
+      
+      //metodo para subir imagen al storage
+      /*
+        new Promise(subirImagen).then((image_url) => {
+          let frm = document.getElementById("frm_producto");
+          let obj = new FormData(frm);
+          obj.append("url", image_url);
+          crearProducto(obj);
+        });
+
+        //bloque que soloactualiza los textos en el objeto, se debe borrar cuando se actualice la url de la imagen
+
+        //pregunta si hay algún archivo para borrar y actualizar la imagen del producto
+
+        if(btn_file.files.length > 0){
+            console.log("El campo de archivo tiene un archivo cargado.");
+
+            //ObtenerElemntosSoloStorage();
+            //new Promise(subirImagen).then((image_url) => {
+            let frm = document.getElementById("frm_producto");
+            let obj = new FormData(frm);
+           // obj.append("url", image_url);
+            obj.append("key", keyUpdate);
+            crearProducto(obj);
+       // });
+
+        }
+        else{
+             let frm = document.getElementById("frm_producto");
+             let obj = new FormData(frm);
+             obj.append("key", keyUpdate);
+             crearProducto(obj);
+        }*/
+             let frm = document.getElementById("frm_producto");
+             let obj = new FormData(frm);
+             obj.append("key", keyUpdate);
+             crearProducto(obj);
+
+      }
+
+      function subirImagen(resolve, reject) {
+        uuid = UUID.generate();
+        const storageRef = ref(storage, `images/${uuid}`);
+        const archivo_imagen = document.getElementById("archivo_imagen");
+        const fileList =
+          archivo_imagen.files; /* now you can work with the file list */
+        // 'file' comes from the Blob or File API
+        uploadBytes(storageRef, fileList[0]).then((snapshot) => {
+          getDownloadURL(snapshot.ref).then((downloadURL) => {
+            resolve(downloadURL);
+          });
+        });
+      }
+    </script>
+  </head>
+  <body>
+    <!-- //encabezado con navegación -->
+
+    <!-- header -->
+    <header id="home">
+      <!-- top-bar -->
+      <div class="top-bar py-2 border-bottom">
+        <div class="container">
+          <div class="row middle-flex">
+            <div
+              class="col-xl-7 col-md-5 top-social-agile mb-md-0 mb-1 text-lg-left text-center"
+            >
+              <div class="row">
+                <div class="col-xl-3 col-6 header-top_w3layouts">
+                  <p class="text-da">
+                    <span class="fa fa-map-marker mr-2"></span>Engativá, Bogotá
+                  </p>
+                </div>
+                <div class="col-xl-3 col-6 header-top_w3layouts">
+                  <p class="text-da">
+                    <span class="fa fa-phone mr-2"></span>3015134793
+                  </p>
+                </div>
+                <div class="col-xl-6"></div>
+              </div>
+            </div>
+            <div
+              class="col-xl-5 col-md-7 top-social-agile text-md-right text-center pr-sm-0 mt-md-0 mt-2"
+            >
+              <div class="row middle-flex">
+                <div class="col-lg-5 col-4 top-w3layouts p-md-0 text-right">
+                  <!-- login -->
+                  <a
+                    href="index.html"
+                    class="btn login-button-2 text-uppercase text-wh"
+                  >
+                    <span class="fa fa-sign-in mr-2"></span>Login</a
+                  >
+                  <!-- //login --><!-- login -->
+                </div>
+                <div class="col-lg-7 col-8 social-grid-w3">
+                  <button
+                    type="button"
+                    class="btn submit-contact ml-auto"
+                    id="CerrarSesionBtn"
+                  >
+                    Cerrar Sesión
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="main-top py-1">
+      <div class="container">
+        <div class="nav-content">
+          <!-- logo -->
+          <h1>
+            <a id="logo" class="logo" href="index.html">
+              <img src="images/logo.png" alt="" class="img-fluid" /><span
+                >BAR</span
+              >
+              App
+            </a>
+          </h1>
+          <!-- //logo -->
+          <!-- nav -->
+          <div class="nav_web-dealingsls">
+            <nav>
+              <label for="drop" class="toggle">Menu</label>
+              <input type="checkbox" id="drop" />
+              <ul class="menu">
+                <li id="linkInventario">
+                  <a href="inventario.html">Inventario</a>
+                </li>
+                <li><a href="menu.html">Productos</a></li>
+                <li id="linkRegistro">
+                  <a href="register.html">Registrar Usuario</a>
+                </li>
+                <li id="linkCarga">
+                  <a href="loadform.html">Cargar Producto</a>
+                </li>
+                <li><a href="calculoOrden.html">Turno Mesas</a></li>
+              </ul>
+            </nav>
+          </div>
+          <!-- //nav -->
+        </div>
+      </div>
+    </div>
+
+    <!-- //formulario -->
+
+    <section>
+      <div class="container pb-xl-5 pb-lg-3">
+        <div class="title-section text-center mb-md-5 mb-4">
+          <div class="container py-xl-4">
+            <p class="w3ls-title-sub">Tasty</p>
+            <h3 class="w3ls-title"><span>Actualizar producto</span></h3>
+
+            <div class="info-form-right mt-4 p-0">
+            <form action="" id="frm_producto">
+                <div class="form-group mb-2 pr-lg-1">
+                <p class="w3ls-title-sub">Nombre</p>
+              </div>
+              <div class="form-group mb-2 pr-lg-1">
+              
+                
+                <input
+                  type="text"
+                  id="nombre"
+                  name="nombre"
+                  placeholder="Ingrese el nombre del producto"
+                  class="expand_label"
+                /> 
+              </div>
+              <div class="form-group mb-2 pr-lg-1">
+                <p class="w3ls-title-sub">Descripción</p>
+              </div>
+              <div class="form-group mb-2 pr-lg-1">
+              
+                <textarea
+                  placeholder="Descripción del producto"
+                  name="descripcion"
+                  id="descripcion"
+                  cols="20"
+                  rows="5"
+                  class="expand_label"
+                ></textarea>
+              </div>
+              <div class="form-group mb-2 pr-lg-1">
+                <p class="w3ls-title-sub">Precio</p>
+              </div>
+              <div class="form-group mb-2 pr-lg-1">
+              
+                <input type="text" id="precio" name="precio" class="expand_label" placeholder="Ingrese el precio del producto"/> 
+              </div>
+              
+              <br>
+              <br>
+              <div class="form-group mb-2 pr-lg-1">
+              <button type="submit"
+                value="actualizar"
+                id="btn_enviar"
+                class="btn login-button-2 centrar_btn">
+                Actualizar
+              </button>
+            </br>
+              <button id="btn_borrar"
+                class="btn submit-contact centrar_btn">Borrar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+    <!-- copyright -->
+    <div class="cpy-right text-center py-3">
+      <p>
+        © 2023 App Bar | Design by
+        <a> Pedro Castiblanco</a>
+      </p>
+    </div>
+    <!-- //copyright -->
+  </body>
+</html>
