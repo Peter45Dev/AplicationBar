@@ -1100,11 +1100,84 @@
 
       function procesarDatosHist(data) {
         ArrayLocalesHist = [];
+        let cambio;
 
         for (var i in data) {
-          ArrayLocalesHist.push(data[i]);
+          console.log("--key", i);
+          cambio = data[i];
+          cambio.key = i;
+
+          ArrayLocalesHist.push(cambio);
         }
+        //console.log("-arreglosCamb", ArrayLocalesHist);
+        CambiosEliminar();
         llenarListaLocal(); //se llena la tabla con los locales que hay en la DB
+      }
+
+      function CambiosEliminar() {
+        let arregloKeys = [];
+        let arreglosfechas = [];
+        //console.log("entró a cambiosEliminar");
+        for (var i in ArrayLocalesHist) {
+          let objetoPuntual = ArrayLocalesHist[i];
+          //console.log("arregloloc:", objetoPuntual);
+          for (let atributo in ArrayLocalesHist[i]) {
+            //console.log("atributo", objetoPuntual[atributo], arregloMesas[i]);
+            // Agregar una nueva celda en la fila
+            if (atributo == "cambios") {
+              let CambioObjeto = objetoPuntual[atributo];
+              for (var j in CambioObjeto) {
+                for (let atributoCambio in CambioObjeto[j]) {
+                  if (atributoCambio == "fecha") {
+                    arregloKeys.push(
+                      "historial/" + ArrayLocalesHist[i].key + "/cambios/" + j
+                    );
+                    arreglosfechas.push(CambioObjeto[j][atributoCambio]);
+                  }
+                }
+              }
+            }
+          }
+        }
+        //console.log("keys", arregloKeys, "fechas", arreglosfechas);
+        compararFechasCambios(arreglosfechas, arregloKeys);
+      }
+
+      function compararFechasCambios(arrayfechas, arraykeys) {
+        let SesionesEliminar = [];
+
+        const fechaCurrent = new Date();
+
+        //console.log("sesion", data);
+        for (var i in arrayfechas) {
+          const partesFecha = arrayfechas[i].split("/");
+          const dia = parseInt(partesFecha[0], 10); // Convierte a número
+          const mes = parseInt(partesFecha[1], 10) - 1; // Los meses en JavaScript son de 0 a 11
+          const anio = parseInt(partesFecha[2], 10);
+
+          //console.log("partes fecha", partesFecha);
+
+          // Crea un objeto Date con la fecha de la cadena
+          const fechainicial = new Date(anio, mes, dia);
+          //console.log("fecha inicial sin suma", fechainicial);
+          fechainicial.setDate(fechainicial.getDate() + 30);
+          //console.log("fi", fechainicial, "fc", fechaCurrent);
+          if (fechaCurrent > fechainicial) {
+            SesionesEliminar.push(arraykeys[i]);
+          }
+        }
+        if (SesionesEliminar.length > 0) {
+          //console.log("sesiones a eliminar", SesionesEliminar);
+          eliminarSesionesViejas(SesionesEliminar);
+        }
+      }
+
+      function eliminarSesionesViejas(array) {
+        for (var i in array) {
+          remove(_ref(db, `${array[i]}`)).then(() => {
+            console.log("sesion ", array[i], " borrada");
+          });
+        }
       }
 
       function llenarListaLocal() {
